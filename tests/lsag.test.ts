@@ -232,7 +232,16 @@ describe('LSAG', () => {
     it('handles uppercase hex pubkeys correctly', () => {
       const upperRing = ring.map(pk => pk.toUpperCase());
       const sig = lsagSign('upper test', upperRing, 0, signer.privateKey, electionId);
+      // Ring is normalised to lowercase in the returned signature
+      expect(sig.ring).toEqual(ring.map(pk => pk.toLowerCase()));
       expect(lsagVerify(sig)).toBe(true);
+    });
+
+    it('verifies a signature whose stored ring has uppercase keys', () => {
+      const sig = lsagSign('test', ring, 0, signer.privateKey, electionId);
+      // Simulate deserialisation with uppercase ring
+      const upperSig = { ...sig, ring: sig.ring.map(pk => pk.toUpperCase()) };
+      expect(lsagVerify(upperSig)).toBe(true);
     });
   });
 

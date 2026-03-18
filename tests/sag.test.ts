@@ -185,7 +185,17 @@ describe('ring-signature (SAG)', () => {
       const { keys, pubkeys } = makeRing(3);
       const upperRing = pubkeys.map(pk => pk.toUpperCase());
       const sig = ringSign('upper test', upperRing, 0, keys[0].privateKey);
+      // Ring is normalised to lowercase in the returned signature
+      expect(sig.ring).toEqual(pubkeys.map(pk => pk.toLowerCase()));
       expect(ringVerify(sig)).toBe(true);
+    });
+
+    it('verifies a signature whose stored ring has uppercase keys', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const sig = ringSign('test', pubkeys, 0, keys[0].privateKey);
+      // Simulate deserialisation with uppercase ring
+      const upperSig = { ...sig, ring: sig.ring.map(pk => pk.toUpperCase()) };
+      expect(ringVerify(upperSig)).toBe(true);
     });
   });
 });
