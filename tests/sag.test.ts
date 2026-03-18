@@ -154,5 +154,48 @@ describe('ring-signature (SAG)', () => {
       expect(() => ringSign('test', pubkeys, 0, keys[1].privateKey))
         .toThrow(ValidationError);
     });
+
+    it('rejects non-string message', () => {
+      const { keys, pubkeys } = makeRing(3);
+      expect(() => ringSign(123 as any, pubkeys, 0, keys[0].privateKey))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects non-array ring', () => {
+      const { keys } = makeRing(3);
+      expect(() => ringSign('test', 'not-an-array' as any, 0, keys[0].privateKey))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects non-string privateKey', () => {
+      const { pubkeys } = makeRing(3);
+      expect(() => ringSign('test', pubkeys, 0, 123 as any))
+        .toThrow(ValidationError);
+    });
+
+    it('detects mixed-case hex duplicate ring members', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const upper = pubkeys[0].toUpperCase();
+      const dupeRing = [pubkeys[0], upper, pubkeys[2]];
+      expect(() => ringSign('test', dupeRing, 0, keys[0].privateKey))
+        .toThrow('duplicate');
+    });
+
+    it('handles uppercase hex pubkeys correctly', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const upperRing = pubkeys.map(pk => pk.toUpperCase());
+      const sig = ringSign('upper test', upperRing, 0, keys[0].privateKey);
+      // Ring is normalised to lowercase in the returned signature
+      expect(sig.ring).toEqual(pubkeys.map(pk => pk.toLowerCase()));
+      expect(ringVerify(sig)).toBe(true);
+    });
+
+    it('verifies a signature whose stored ring has uppercase keys', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const sig = ringSign('test', pubkeys, 0, keys[0].privateKey);
+      // Simulate deserialisation with uppercase ring
+      const upperSig = { ...sig, ring: sig.ring.map(pk => pk.toUpperCase()) };
+      expect(ringVerify(upperSig)).toBe(true);
+    });
   });
 });
