@@ -3,8 +3,8 @@
 ## Setup
 
 ```bash
-git clone https://github.com/forgesworn/@forgesworn/ring-sig.git
-cd @forgesworn/ring-sig
+git clone https://github.com/forgesworn/ring-sig.git
+cd ring-sig
 npm install
 npm test
 ```
