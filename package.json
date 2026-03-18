@@ -1,5 +1,5 @@
 {
-  "name": "secp256k1-ring-sig",
+  "name": "@forgesworn/ring-sig",
   "version": "0.0.0-development",
   "description": "SAG and LSAG ring signatures on secp256k1 — prove group membership without revealing identity",
   "type": "module",

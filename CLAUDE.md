@@ -1,4 +1,4 @@
-# CLAUDE.md — secp256k1-ring-sig
+# CLAUDE.md — @forgesworn/ring-sig
 
 AI agent instructions for working on this codebase.
 

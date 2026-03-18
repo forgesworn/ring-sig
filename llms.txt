@@ -1,4 +1,4 @@
-# secp256k1-ring-sig
+# @forgesworn/ring-sig
 
 > SAG and LSAG ring signatures on secp256k1 — prove group membership without revealing identity, with optional double-action detection via linkable key images.
 
@@ -7,7 +7,7 @@
 Install from npm:
 
 ```bash
-npm install secp256k1-ring-sig
+npm install @forgesworn/ring-sig
 ```
 
 All public keys are x-only hex (32 bytes / 64 hex characters), following the BIP-340 convention used by Nostr and Taproot. Private keys are standard 32-byte hex scalars.
@@ -15,7 +15,7 @@ All public keys are x-only hex (32 bytes / 64 hex characters), following the BIP
 The library is ESM-only. Import from the single entry point:
 
 ```typescript
-import { ringSign, ringVerify, lsagSign, lsagVerify, computeKeyImage, hasDuplicateKeyImage } from 'secp256k1-ring-sig';
+import { ringSign, ringVerify, lsagSign, lsagVerify, computeKeyImage, hasDuplicateKeyImage } from '@forgesworn/ring-sig';
 ```
 
 ## Key Concepts

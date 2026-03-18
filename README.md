@@ -1,4 +1,4 @@
-# secp256k1-ring-sig
+# @forgesworn/ring-sig
 
 SAG and LSAG ring signatures on secp256k1.
 
@@ -14,7 +14,7 @@ SAG and LSAG ring signatures on secp256k1.
 ## Install
 
 ```bash
-npm install secp256k1-ring-sig
+npm install @forgesworn/ring-sig
 ```
 
 ## Usage
@@ -22,7 +22,7 @@ npm install secp256k1-ring-sig
 ### SAG — Spontaneous Anonymous Group signatures
 
 ```typescript
-import { ringSign, ringVerify } from 'secp256k1-ring-sig';
+import { ringSign, ringVerify } from '@forgesworn/ring-sig';
 
 // A ring of x-only public keys (32 bytes, hex)
 const ring = [pubkey0, pubkey1, pubkey2, pubkey3];
@@ -37,7 +37,7 @@ const valid = ringVerify(sig); // true
 ### LSAG — Linkable SAG (double-action detection via key images)
 
 ```typescript
-import { lsagSign, lsagVerify, computeKeyImage, hasDuplicateKeyImage } from 'secp256k1-ring-sig';
+import { lsagSign, lsagVerify, computeKeyImage, hasDuplicateKeyImage } from '@forgesworn/ring-sig';
 
 const electionId = 'vote-2026-q1';
 const ring = [pubkey0, pubkey1, pubkey2];
