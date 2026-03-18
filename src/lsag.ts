@@ -27,6 +27,7 @@ export interface LsagSignature {
   ring: string[];        // x-only pubkey hex array (internally converted via '02' prefix)
   message: string;       // the signed message
   electionId: string;    // binds key image to this election
+  domain?: string;       // domain separator (optional; defaults to 'lsag-v1')
 }
 
 /** Maximum number of members in a ring, to prevent denial-of-service via unbounded computation. */
@@ -112,6 +113,7 @@ export function lsagSign(
 ): LsagSignature {
   if (ring.length < 2) throw new ValidationError('Ring must have at least 2 members');
   if (ring.length > MAX_RING_SIZE) throw new ValidationError(`Ring size ${ring.length} exceeds maximum of ${MAX_RING_SIZE}`);
+  if (!Number.isInteger(signerIndex)) throw new ValidationError('Signer index must be an integer');
   if (signerIndex < 0 || signerIndex >= ring.length) throw new ValidationError('Signer index out of range');
   const ringSet = new Set(ring);
   if (ringSet.size !== ring.length) throw new ValidationError('Ring contains duplicate members');
@@ -129,6 +131,12 @@ export function lsagSign(
   const pAffine = P.toAffine();
   if (pAffine.y % 2n !== 0n) {
     x = mod(N - x);
+  }
+
+  // Verify private key corresponds to the claimed ring member
+  const derivedPub = G.multiply(x);
+  if (!derivedPub.equals(ringPoints[pi])) {
+    throw new ValidationError('Private key does not match ring member at signerIndex');
   }
 
   // Key image: I = x * H_p(P_s || electionId)
@@ -167,13 +175,14 @@ export function lsagSign(
     ring,
     message,
     electionId,
+    ...(domain !== DEFAULT_LSAG_DOMAIN ? { domain } : {}),
   };
 }
 
 export function lsagVerify(sig: LsagSignature): boolean {
   try {
     const { keyImage, c0, responses, ring, message, electionId } = sig;
-    const domain = DEFAULT_LSAG_DOMAIN;
+    const domain = sig.domain ?? DEFAULT_LSAG_DOMAIN;
     if (ring.length < 2) return false;
     if (ring.length > MAX_RING_SIZE) return false;
     if (responses.length !== ring.length) return false;

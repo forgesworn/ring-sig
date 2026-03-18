@@ -6,6 +6,7 @@ import {
   ringSign,
   ringVerify,
 } from '../src/sag.js';
+import { ValidationError } from '../src/errors.js';
 
 function generateKeyPair(): { privateKey: string; publicKey: string } {
   const priv = secp256k1.utils.randomPrivateKey();
@@ -59,9 +60,9 @@ describe('ring-signature (SAG)', () => {
     it('rejects tampered responses', () => {
       const { keys, pubkeys } = makeRing(3);
       const sig = ringSign('test', pubkeys, 0, keys[0].privateKey);
-      // Flip a byte in one response
-      const r = sig.responses[1];
-      sig.responses[1] = 'ff' + r.slice(2);
+      // XOR the first byte to guarantee a different value
+      const r = BigInt('0x' + sig.responses[1]);
+      sig.responses[1] = (r ^ 1n).toString(16).padStart(64, '0');
       expect(ringVerify(sig)).toBe(false);
     });
 
@@ -100,6 +101,58 @@ describe('ring-signature (SAG)', () => {
         message: 'test',
       };
       expect(ringVerify(sig)).toBe(false);
+    });
+  });
+
+  describe('custom domain', () => {
+    it('signs and verifies with a custom domain', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const sig = ringSign('domain test', pubkeys, 1, keys[1].privateKey, 'custom-domain-v1');
+      expect(sig.domain).toBe('custom-domain-v1');
+      expect(ringVerify(sig)).toBe(true);
+    });
+
+    it('omits domain field when using default', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const sig = ringSign('default domain', pubkeys, 0, keys[0].privateKey);
+      expect(sig.domain).toBeUndefined();
+      expect(ringVerify(sig)).toBe(true);
+    });
+
+    it('cross-domain incompatibility: domain A sig fails with domain B', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const sig = ringSign('cross-domain', pubkeys, 0, keys[0].privateKey, 'domain-A');
+      expect(ringVerify(sig)).toBe(true);
+      // Tamper domain to B — must fail
+      sig.domain = 'domain-B';
+      expect(ringVerify(sig)).toBe(false);
+    });
+  });
+
+  describe('input validation', () => {
+    it('rejects non-integer signerIndex (NaN)', () => {
+      const { keys, pubkeys } = makeRing(3);
+      expect(() => ringSign('test', pubkeys, NaN, keys[0].privateKey))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects non-integer signerIndex (Infinity)', () => {
+      const { keys, pubkeys } = makeRing(3);
+      expect(() => ringSign('test', pubkeys, Infinity, keys[0].privateKey))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects non-integer signerIndex (float)', () => {
+      const { keys, pubkeys } = makeRing(3);
+      expect(() => ringSign('test', pubkeys, 0.5, keys[0].privateKey))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects mismatched private key', () => {
+      const { keys, pubkeys } = makeRing(3);
+      // Use keys[1] private key but claim to be at index 0
+      expect(() => ringSign('test', pubkeys, 0, keys[1].privateKey))
+        .toThrow(ValidationError);
     });
   });
 });

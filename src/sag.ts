@@ -71,6 +71,7 @@ export function ringSign(
 ): RingSignature {
   if (ring.length < 2) throw new ValidationError('Ring must have at least 2 members');
   if (ring.length > MAX_RING_SIZE) throw new ValidationError(`Ring size ${ring.length} exceeds maximum of ${MAX_RING_SIZE}`);
+  if (!Number.isInteger(signerIndex)) throw new ValidationError('Signer index must be an integer');
   if (signerIndex < 0 || signerIndex >= ring.length) throw new ValidationError('Signer index out of range');
   const ringSet = new Set(ring);
   if (ringSet.size !== ring.length) throw new ValidationError('Ring contains duplicate members');
@@ -90,6 +91,12 @@ export function ringSign(
   const pAffine = P.toAffine();
   if (pAffine.y % 2n !== 0n) {
     x = mod(N - x);
+  }
+
+  // Verify private key corresponds to the claimed ring member
+  const derivedPub = Point.BASE.multiply(x);
+  if (!derivedPub.equals(ringPoints[pi])) {
+    throw new ValidationError('Private key does not match ring member at signerIndex');
   }
 
   // Step 1: Random nonce
@@ -138,6 +145,7 @@ export function ringSign(
     c0: scalarToHex(challenges[0]),
     responses: responses.map(scalarToHex),
     message,
+    ...(domain !== DEFAULT_SAG_DOMAIN ? { domain } : {}),
   };
 }
 

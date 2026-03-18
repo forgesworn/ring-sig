@@ -55,14 +55,27 @@ export function scalarEqual(a: bigint, b: bigint): boolean {
   return constantTimeEqual(aBuf, bBuf);
 }
 
-/** Hash to scalar: SHA-256 of concatenated data, reduced mod N.
+/** Encode a variable-length field with a 4-byte big-endian length prefix.
+ *  This prevents ambiguity when concatenating fields of different lengths. */
+function lengthPrefix(data: Uint8Array): Uint8Array {
+  const len = new Uint8Array(4);
+  const view = new DataView(len.buffer);
+  view.setUint32(0, data.length, false); // big-endian
+  return concatBytes(len, data);
+}
+
+/** Hash to scalar: SHA-256 of length-prefixed concatenated data, reduced mod N.
+ *
+ *  Each field is prefixed with its 4-byte big-endian length before hashing,
+ *  preventing domain separation ambiguity between variable-length inputs.
  *
  *  NOTE: SHA-256 produces 256 bits and N is ~2^256, so the modular reduction
  *  introduces a negligible bias (~2^-128). This is acceptable for Fiat-Shamir
  *  challenges. A wider hash (e.g. SHA-512) would eliminate the bias entirely
  *  per RFC 9380 hash-to-field, but is not required at this security level. */
 export function hashToScalar(domain: Uint8Array, ...parts: Uint8Array[]): bigint {
-  const data = concatBytes(domain, ...parts);
+  const prefixed = [lengthPrefix(domain), ...parts.map(lengthPrefix)];
+  const data = concatBytes(...prefixed);
   const h = sha256(data);
   return mod(BigInt('0x' + bytesToHex(h)));
 }
@@ -103,27 +116,3 @@ export function hashToPoint(data: Uint8Array): ProjectivePoint {
   throw new CryptoError('Failed to hash to curve point');
 }
 
-/**
- * Generator H: nothing-up-my-sleeve second generator for Pedersen commitments.
- * Created by hashing to a curve point — nobody knows log_G(H).
- */
-function createGeneratorH(): ProjectivePoint {
-  const seed = utf8ToBytes('secp256k1-pedersen-H-v1');
-  for (let i = 0; i < 256; i++) {
-    const buf = new Uint8Array(seed.length + 1);
-    buf.set(seed);
-    buf[seed.length] = i;
-    const h = sha256(buf);
-    const hex = '02' + bytesToHex(h);
-    try {
-      const point = Point.fromHex(hex);
-      point.assertValidity();
-      return point;
-    } catch {
-      continue;
-    }
-  }
-  throw new CryptoError('Failed to generate H point');
-}
-
-export const H = createGeneratorH();

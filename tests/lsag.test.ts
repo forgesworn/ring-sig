@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { secp256k1, schnorr } from '@noble/curves/secp256k1';
 import { bytesToHex } from '@noble/hashes/utils';
 import { MAX_RING_SIZE, computeKeyImage, lsagSign, lsagVerify, hasDuplicateKeyImage } from '../src/lsag.js';
+import { ValidationError } from '../src/errors.js';
 
 function generateKeyPair(): { privateKey: string; publicKey: string } {
   const priv = secp256k1.utils.randomPrivateKey();
@@ -154,6 +155,51 @@ describe('LSAG', () => {
       const sig = lsagSign('test', ring, 0, signer.privateKey, electionId);
       const expected = computeKeyImage(signer.privateKey, signer.publicKey, electionId);
       expect(sig.keyImage).toBe(expected);
+    });
+  });
+
+  describe('custom domain', () => {
+    it('signs and verifies with a custom domain', () => {
+      const sig = lsagSign('domain test', ring, 0, signer.privateKey, electionId, 'custom-lsag-v1');
+      expect(sig.domain).toBe('custom-lsag-v1');
+      expect(lsagVerify(sig)).toBe(true);
+    });
+
+    it('omits domain field when using default', () => {
+      const sig = lsagSign('default domain', ring, 0, signer.privateKey, electionId);
+      expect(sig.domain).toBeUndefined();
+      expect(lsagVerify(sig)).toBe(true);
+    });
+
+    it('cross-domain incompatibility: domain A sig fails with domain B', () => {
+      const sig = lsagSign('cross-domain', ring, 0, signer.privateKey, electionId, 'domain-A');
+      expect(lsagVerify(sig)).toBe(true);
+      // Tamper domain to B — must fail
+      sig.domain = 'domain-B';
+      expect(lsagVerify(sig)).toBe(false);
+    });
+  });
+
+  describe('input validation', () => {
+    it('rejects non-integer signerIndex (NaN)', () => {
+      expect(() => lsagSign('test', ring, NaN, signer.privateKey, electionId))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects non-integer signerIndex (Infinity)', () => {
+      expect(() => lsagSign('test', ring, Infinity, signer.privateKey, electionId))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects non-integer signerIndex (float)', () => {
+      expect(() => lsagSign('test', ring, 0.5, signer.privateKey, electionId))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects mismatched private key', () => {
+      // Use other1's private key but claim to be signer (index 0)
+      expect(() => lsagSign('test', ring, 0, other1.privateKey, electionId))
+        .toThrow(ValidationError);
     });
   });
 });
