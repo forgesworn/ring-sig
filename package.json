@@ -11,14 +11,25 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "node node_modules/vitest/vitest.mjs run",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
-  "keywords": ["ring-signature", "sag", "lsag", "secp256k1", "zero-knowledge", "anonymous", "privacy", "nostr"],
+  "keywords": [
+    "ring-signature",
+    "sag",
+    "lsag",
+    "secp256k1",
+    "zero-knowledge",
+    "anonymous",
+    "privacy",
+    "nostr"
+  ],
   "author": "Darren",
   "license": "MIT",
   "repository": {
@@ -30,6 +41,13 @@
     "@noble/hashes": "^1.7.1"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^12.0.6",
+    "@semantic-release/npm": "^13.1.5",
+    "@semantic-release/release-notes-generator": "^14.1.0",
+    "semantic-release": "^25.0.3",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   }
