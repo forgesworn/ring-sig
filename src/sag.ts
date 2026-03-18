@@ -69,10 +69,14 @@ export function ringSign(
   privateKey: string,
   domain: string = DEFAULT_SAG_DOMAIN
 ): RingSignature {
+  if (typeof message !== 'string') throw new ValidationError('message must be a string');
+  if (!Array.isArray(ring)) throw new ValidationError('ring must be an array');
+  if (typeof privateKey !== 'string') throw new ValidationError('privateKey must be a string');
   if (ring.length < 2) throw new ValidationError('Ring must have at least 2 members');
   if (ring.length > MAX_RING_SIZE) throw new ValidationError(`Ring size ${ring.length} exceeds maximum of ${MAX_RING_SIZE}`);
   if (!Number.isInteger(signerIndex)) throw new ValidationError('Signer index must be an integer');
   if (signerIndex < 0 || signerIndex >= ring.length) throw new ValidationError('Signer index out of range');
+  ring = ring.map(pk => pk.toLowerCase());
   const ringSet = new Set(ring);
   if (ringSet.size !== ring.length) throw new ValidationError('Ring contains duplicate members');
 
@@ -157,7 +161,8 @@ export function ringSign(
  */
 export function ringVerify(sig: RingSignature): boolean {
   try {
-    const { ring, c0, responses, message } = sig;
+    const { c0, responses, message } = sig;
+    const ring = sig.ring.map(pk => pk.toLowerCase());
     const domain = sig.domain ?? DEFAULT_SAG_DOMAIN;
     if (ring.length < 2) return false;
     if (ring.length > MAX_RING_SIZE) return false;

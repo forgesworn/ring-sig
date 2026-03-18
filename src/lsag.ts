@@ -66,12 +66,22 @@ function hashPointForMember(pubkeyHex: string, electionId: string): ProjectivePo
  * I = x * H_p(P || electionId)
  */
 export function computeKeyImage(privateKey: string, publicKey: string, electionId: string): string {
+  if (typeof privateKey !== 'string') throw new ValidationError('privateKey must be a string');
+  if (typeof publicKey !== 'string') throw new ValidationError('publicKey must be a string');
+  if (typeof electionId !== 'string' || !electionId) throw new ValidationError('electionId must be a non-empty string');
+  publicKey = publicKey.toLowerCase();
   let x = hexToScalar(privateKey);
   // BIP-340 parity fix
   const P = G.multiply(x);
   const pAffine = P.toAffine();
   if (pAffine.y % 2n !== 0n) {
     x = mod(N - x);
+  }
+  // Verify private key corresponds to the provided public key
+  const derivedPub = G.multiply(x);
+  const expectedPoint = pubkeyToPoint(publicKey);
+  if (!derivedPub.equals(expectedPoint)) {
+    throw new ValidationError('Private key does not match the provided public key');
   }
   const Hp = hashPointForMember(publicKey, electionId);
   const I = Hp.multiply(x);
@@ -111,10 +121,15 @@ export function lsagSign(
   electionId: string,
   domain: string = DEFAULT_LSAG_DOMAIN,
 ): LsagSignature {
+  if (typeof message !== 'string') throw new ValidationError('message must be a string');
+  if (!Array.isArray(ring)) throw new ValidationError('ring must be an array');
+  if (typeof privateKey !== 'string') throw new ValidationError('privateKey must be a string');
+  if (typeof electionId !== 'string' || !electionId) throw new ValidationError('electionId must be a non-empty string');
   if (ring.length < 2) throw new ValidationError('Ring must have at least 2 members');
   if (ring.length > MAX_RING_SIZE) throw new ValidationError(`Ring size ${ring.length} exceeds maximum of ${MAX_RING_SIZE}`);
   if (!Number.isInteger(signerIndex)) throw new ValidationError('Signer index must be an integer');
   if (signerIndex < 0 || signerIndex >= ring.length) throw new ValidationError('Signer index out of range');
+  ring = ring.map(pk => pk.toLowerCase());
   const ringSet = new Set(ring);
   if (ringSet.size !== ring.length) throw new ValidationError('Ring contains duplicate members');
 
@@ -181,7 +196,9 @@ export function lsagSign(
 
 export function lsagVerify(sig: LsagSignature): boolean {
   try {
-    const { keyImage, c0, responses, ring, message, electionId } = sig;
+    const { keyImage, c0, responses, message, electionId } = sig;
+    if (typeof electionId !== 'string' || !electionId) return false;
+    const ring = sig.ring.map(pk => pk.toLowerCase());
     const domain = sig.domain ?? DEFAULT_LSAG_DOMAIN;
     if (ring.length < 2) return false;
     if (ring.length > MAX_RING_SIZE) return false;
