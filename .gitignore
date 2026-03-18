@@ -2,3 +2,5 @@ node_modules/
 dist/
 .idea/
 *.tgz
+.env
+.env.*

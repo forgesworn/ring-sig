@@ -1,0 +1,81 @@
+# secp256k1-ring-sig
+
+> SAG and LSAG ring signatures on secp256k1 — prove group membership without revealing identity, with optional double-action detection via linkable key images.
+
+## Getting Started
+
+Install from npm:
+
+```bash
+npm install secp256k1-ring-sig
+```
+
+All public keys are x-only hex (32 bytes / 64 hex characters), following the BIP-340 convention used by Nostr and Taproot. Private keys are standard 32-byte hex scalars.
+
+The library is ESM-only. Import from the single entry point:
+
+```typescript
+import { ringSign, ringVerify, lsagSign, lsagVerify, computeKeyImage, hasDuplicateKeyImage } from 'secp256k1-ring-sig';
+```
+
+## Key Concepts
+
+### Ring Signatures
+
+A ring signature proves "one of these N public keys signed this message" without revealing which one. The verifier learns nothing about the signer's identity — only that they are a member of the specified ring. Ring size is O(n) in the signature.
+
+### SAG (Spontaneous Anonymous Group)
+
+Pure anonymity. Given a set of public keys, the signer produces a signature that any verifier can check against the ring, but nobody can determine which member signed. Useful for whistleblowing, anonymous attestation, and group membership proofs.
+
+### LSAG (Linkable SAG)
+
+Extends SAG with a deterministic **key image** `I = x * H_p(P || electionId)`. If the same private key signs twice with the same `electionId`, the key image is identical — enabling double-action detection. Different `electionId` values produce different key images, so signatures cannot be linked across contexts.
+
+### Key Images
+
+A key image is a curve point deterministically derived from a private key and an election identifier. Two signatures share a key image if and only if they were produced by the same key for the same election. This enables voting, rate-limiting, and double-spend prevention without deanonymisation.
+
+### Domain Separators
+
+Both SAG and LSAG use domain separation strings (defaulting to `'sag-v1'` and `'lsag-v1'`). Custom domains provide cross-protocol isolation — signatures under one domain cannot be replayed under another.
+
+## API Surface
+
+### SAG
+
+- `ringSign(message, ring, signerIndex, privateKey, domain?)` — produce a ring signature. Returns a `RingSignature` object.
+- `ringVerify(sig)` — verify a ring signature. Returns `boolean`.
+- `RingSignature` — interface: `{ ring, c0, responses, message, domain? }`
+
+### LSAG
+
+- `lsagSign(message, ring, signerIndex, privateKey, electionId, domain?)` — produce a linkable ring signature. Returns an `LsagSignature` object.
+- `lsagVerify(sig)` — verify a linkable ring signature. Returns `boolean`.
+- `computeKeyImage(privateKey, publicKey, electionId)` — compute the deterministic key image for a key/election pair. Returns compressed point hex.
+- `hasDuplicateKeyImage(keyImage, existingImages)` — constant-time check whether a key image appears in a list. Returns `boolean`.
+- `LsagSignature` — interface: `{ keyImage, c0, responses, ring, message, electionId, domain? }`
+
+### Errors
+
+- `RingSignatureError` — base error class
+- `ValidationError` — malformed inputs, bounds exceeded (ring too small/large, index out of range, duplicate members)
+- `CryptoError` — invalid keys, failed curve operations
+
+### Constants
+
+- `MAX_RING_SIZE` — 1000 members (exported from both SAG and LSAG modules)
+
+## When To Use This
+
+**Use SAG when** you need pure anonymity within a group — no linkability between signatures, no double-action detection. Good for anonymous attestation, whistleblowing, and one-off group membership proofs.
+
+**Use LSAG when** you need anonymous signatures that can be checked for double-action — voting (one person, one vote), rate limiting, or preventing double-spending. The key image links signatures by the same key within the same context without revealing who signed.
+
+**Do not use this library** if you need constant-size signatures regardless of ring size (use a ZK-SNARK scheme instead), sub-group security on a different curve, or post-quantum resistance.
+
+### Dependencies
+
+Only two runtime dependencies, both from the audited `@noble` family:
+- `@noble/curves` (secp256k1 operations)
+- `@noble/hashes` (SHA-256, byte utilities)
