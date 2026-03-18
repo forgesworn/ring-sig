@@ -201,5 +201,73 @@ describe('LSAG', () => {
       expect(() => lsagSign('test', ring, 0, other1.privateKey, electionId))
         .toThrow(ValidationError);
     });
+
+    it('rejects non-string message', () => {
+      expect(() => lsagSign(123 as any, ring, 0, signer.privateKey, electionId))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects non-array ring', () => {
+      expect(() => lsagSign('test', 'not-an-array' as any, 0, signer.privateKey, electionId))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects non-string privateKey', () => {
+      expect(() => lsagSign('test', ring, 0, 123 as any, electionId))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects empty electionId', () => {
+      expect(() => lsagSign('test', ring, 0, signer.privateKey, ''))
+        .toThrow(ValidationError);
+    });
+
+    it('detects mixed-case hex duplicate ring members', () => {
+      const upper = ring[0].toUpperCase();
+      const dupeRing = [ring[0], upper, ring[2]];
+      expect(() => lsagSign('test', dupeRing, 0, signer.privateKey, electionId))
+        .toThrow('duplicate');
+    });
+
+    it('handles uppercase hex pubkeys correctly', () => {
+      const upperRing = ring.map(pk => pk.toUpperCase());
+      const sig = lsagSign('upper test', upperRing, 0, signer.privateKey, electionId);
+      expect(lsagVerify(sig)).toBe(true);
+    });
+  });
+
+  describe('computeKeyImage validation', () => {
+    it('rejects mismatched private/public key pair', () => {
+      expect(() => computeKeyImage(other1.privateKey, signer.publicKey, electionId))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects empty electionId', () => {
+      expect(() => computeKeyImage(signer.privateKey, signer.publicKey, ''))
+        .toThrow(ValidationError);
+    });
+
+    it('rejects non-string inputs', () => {
+      expect(() => computeKeyImage(123 as any, signer.publicKey, electionId))
+        .toThrow(ValidationError);
+      expect(() => computeKeyImage(signer.privateKey, 123 as any, electionId))
+        .toThrow(ValidationError);
+      expect(() => computeKeyImage(signer.privateKey, signer.publicKey, 123 as any))
+        .toThrow(ValidationError);
+    });
+  });
+
+  describe('lsagVerify edge cases', () => {
+    it('rejects signature with missing electionId', () => {
+      const sig = lsagSign('test', ring, 0, signer.privateKey, electionId);
+      const bad = { ...sig, electionId: undefined } as any;
+      expect(lsagVerify(bad)).toBe(false);
+    });
+
+    it('rejects signature with empty electionId', () => {
+      const sig = lsagSign('test', ring, 0, signer.privateKey, electionId);
+      const bad = { ...sig, electionId: '' };
+      expect(lsagVerify(bad)).toBe(false);
+    });
   });
 });
