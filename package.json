@@ -1,6 +1,6 @@
 {
   "name": "@forgesworn/ring-sig",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "SAG and LSAG ring signatures on secp256k1 — prove group membership without revealing identity",
   "type": "module",
   "main": "./dist/index.js",

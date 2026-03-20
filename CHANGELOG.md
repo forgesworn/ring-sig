@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/forgesworn/ring-sig/compare/v1.0.1...v1.0.2) (2026-03-20)
+
+
+### Bug Fixes
+
+* correct copyright to ForgeSworn ([74d4aa3](https://github.com/forgesworn/ring-sig/commit/74d4aa3c590cfab412cf25f394df4d40f702e00d))
+
 ## [1.0.1](https://github.com/forgesworn/ring-sig/compare/v1.0.0...v1.0.1) (2026-03-18)
 
 
