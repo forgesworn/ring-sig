@@ -1,3 +1,13 @@
+# [2.0.0](https://github.com/forgesworn/ring-sig/compare/v1.0.2...v2.0.0) (2026-03-25)
+
+
+* feat!: upgrade to @noble/curves v2 and @noble/hashes v2 ([8d9346f](https://github.com/forgesworn/ring-sig/commit/8d9346fec0353b8a765c425a032e365e8a2be147))
+
+
+### BREAKING CHANGES
+
+* @noble/curves upgraded from v1 to v2. Import paths now require .js suffix if consuming from source. Published dist/ is unaffected.
+
 ## [1.0.2](https://github.com/forgesworn/ring-sig/compare/v1.0.1...v1.0.2) (2026-03-20)
 
 
