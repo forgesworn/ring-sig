@@ -1,0 +1,577 @@
+# @forgesworn/ring-sig — Full API Reference
+
+> SAG and LSAG ring signatures on secp256k1. Prove group membership without revealing identity, with optional double-action detection via linkable key images.
+
+Version: 2.0.0 (noble v2)
+Package: `@forgesworn/ring-sig`
+Repository: https://github.com/forgesworn/ring-sig
+Nostr: npub1mgvlrnf5hm9yf0n5mf9nqmvarhvxkc6remu5ec3vf8r0txqkuk7su0e7q2
+Licence: MIT
+
+## Install
+
+```bash
+npm install @forgesworn/ring-sig
+```
+
+## What This Library Does
+
+A ring signature proves "one of these N public keys signed this message" without revealing which one. The verifier learns nothing about the signer's identity — only that they are a member of the specified ring.
+
+Two variants are provided:
+
+- **SAG** (Spontaneous Anonymous Group) — pure anonymity. No linkability at all. Good for one-off attestations, whistleblowing, and group membership proofs.
+- **LSAG** (Linkable SAG) — anonymity plus double-action detection. Signatures from the same key in the same context share a deterministic key image, enabling voting, rate-limiting, and double-spend prevention without deanonymisation.
+
+## Key Format Conventions
+
+All public keys are **x-only hex** — 32 bytes, 64 hex characters, following the BIP-340 convention used by Nostr and Bitcoin Taproot. Internally the library prepends `02` (even y-coordinate) to convert to a compressed point.
+
+Private keys are standard 32-byte hex scalars.
+
+The library applies a BIP-340 parity fix: if `x*G` has odd y, `x` is negated before use, ensuring the derived public key always matches the stored x-only form.
+
+## Entry Point
+
+ESM-only. Single entry point:
+
+```typescript
+import {
+  ringSign,
+  ringVerify,
+  lsagSign,
+  lsagVerify,
+  computeKeyImage,
+  hasDuplicateKeyImage,
+  RingSignatureError,
+  ValidationError,
+  CryptoError,
+  MAX_RING_SIZE,
+} from '@forgesworn/ring-sig';
+```
+
+---
+
+## SAG — Spontaneous Anonymous Group Signatures
+
+### Type: `RingSignature`
+
+```typescript
+interface RingSignature {
+  /** The ring of public keys (x-only hex, 32 bytes each) */
+  ring: string[];
+  /** Starting challenge scalar c_0 (hex) */
+  c0: string;
+  /** Response scalars s_0 … s_{n-1} (hex) — one per ring member */
+  responses: string[];
+  /** The signed message (plaintext, stored verbatim) */
+  message: string;
+  /** Domain separator — omitted when using the default 'sag-v1' */
+  domain?: string;
+}
+```
+
+### `ringSign`
+
+```typescript
+function ringSign(
+  message: string,
+  ring: string[],
+  signerIndex: number,
+  privateKey: string,
+  domain?: string,   // default: 'sag-v1'
+): RingSignature
+```
+
+Produces a SAG ring signature. The signer proves membership in `ring` without revealing their position.
+
+**Parameters**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `message` | `string` | Message to sign. Hashed internally — any UTF-8 string. |
+| `ring` | `string[]` | Array of x-only public key hex strings (32 bytes each). Minimum 2, maximum 1000. Must have no duplicates. |
+| `signerIndex` | `number` | Integer index of the actual signer in `ring`. Must satisfy `0 <= signerIndex < ring.length`. |
+| `privateKey` | `string` | Signer's private key as hex. Must correspond to `ring[signerIndex]`. |
+| `domain` | `string` | Optional domain separator for cross-protocol isolation. Defaults to `'sag-v1'`. |
+
+**Returns** a `RingSignature` object. The signature is serialisable to JSON.
+
+**Throws**
+- `ValidationError` — ring too small/large, duplicate members, index out of range, key mismatch.
+- `CryptoError` — invalid key or curve operation failure.
+
+**Example**
+
+```typescript
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { bytesToHex } from '@noble/hashes/utils';
+import { ringSign } from '@forgesworn/ring-sig';
+
+const priv0 = bytesToHex(secp256k1.utils.randomPrivateKey());
+const priv1 = bytesToHex(secp256k1.utils.randomPrivateKey());
+const priv2 = bytesToHex(secp256k1.utils.randomPrivateKey());
+
+// x-only public keys (drop the 02/03 prefix from compressed form)
+const pub0 = bytesToHex(secp256k1.getPublicKey(priv0, true)).slice(2);
+const pub1 = bytesToHex(secp256k1.getPublicKey(priv1, true)).slice(2);
+const pub2 = bytesToHex(secp256k1.getPublicKey(priv2, true)).slice(2);
+
+const ring = [pub0, pub1, pub2];
+
+// Sign as ring member at index 1 — identity hidden from verifier
+const sig = ringSign('Hello, world!', ring, 1, priv1);
+
+// Serialisable — safe to send over the wire
+console.log(JSON.stringify(sig));
+```
+
+---
+
+### `ringVerify`
+
+```typescript
+function ringVerify(sig: RingSignature): boolean
+```
+
+Verifies a SAG ring signature. Returns `true` if valid, `false` otherwise. Never throws — all errors are caught and returned as `false`.
+
+**Parameters**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `sig` | `RingSignature` | The ring signature to verify. |
+
+**Returns** `boolean` — `true` if the signature is valid, `false` for any malformed input or verification failure.
+
+**Example**
+
+```typescript
+import { ringVerify } from '@forgesworn/ring-sig';
+
+const valid = ringVerify(sig);
+console.log(valid); // true
+
+// Tamper with the message — verification fails
+const tampered = { ...sig, message: 'Different message' };
+console.log(ringVerify(tampered)); // false
+```
+
+---
+
+## LSAG — Linkable Spontaneous Anonymous Group Signatures
+
+### Type: `LsagSignature`
+
+```typescript
+interface LsagSignature {
+  /** Key image I = x * H_p(P || electionId) — compressed point hex (66 hex chars / 33 bytes) */
+  keyImage: string;
+  /** Starting challenge scalar c_0 (hex) */
+  c0: string;
+  /** Response scalars s_0 … s_{n-1} (hex) — one per ring member */
+  responses: string[];
+  /** The ring of public keys (x-only hex, 32 bytes each) */
+  ring: string[];
+  /** The signed message (plaintext, stored verbatim) */
+  message: string;
+  /** Binds the key image to this specific election/context */
+  electionId: string;
+  /** Domain separator — omitted when using the default 'lsag-v1' */
+  domain?: string;
+}
+```
+
+The `keyImage` field is a **compressed secp256k1 point** — 33 bytes, `02` or `03` prefix, 66 hex characters total. It is deterministically derived from the signer's private key and the `electionId`. Two LSAG signatures share a key image if and only if they were produced by the same private key for the same `electionId`.
+
+---
+
+### `lsagSign`
+
+```typescript
+function lsagSign(
+  message: string,
+  ring: string[],
+  signerIndex: number,
+  privateKey: string,
+  electionId: string,
+  domain?: string,   // default: 'lsag-v1'
+): LsagSignature
+```
+
+Produces an LSAG ring signature. Extends SAG with a deterministic key image that enables double-action detection within the same `electionId`, without cross-context linkability.
+
+**Parameters**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `message` | `string` | Message to sign. Any UTF-8 string. |
+| `ring` | `string[]` | Array of x-only public key hex strings. Minimum 2, maximum 1000, no duplicates. |
+| `signerIndex` | `number` | Integer index of the actual signer. Must satisfy `0 <= signerIndex < ring.length`. |
+| `privateKey` | `string` | Signer's private key as hex. Must match `ring[signerIndex]`. |
+| `electionId` | `string` | Non-empty string binding the key image to a specific context (election, vote round, rate-limit window, etc.). |
+| `domain` | `string` | Optional domain separator. Defaults to `'lsag-v1'`. |
+
+**Returns** an `LsagSignature` object. Fully serialisable to JSON.
+
+**Throws**
+- `ValidationError` — ring too small/large, duplicate members, index out of range, key mismatch, empty electionId.
+- `CryptoError` — invalid key or curve operation failure.
+
+**Example**
+
+```typescript
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { bytesToHex } from '@noble/hashes/utils';
+import { lsagSign } from '@forgesworn/ring-sig';
+
+const priv0 = bytesToHex(secp256k1.utils.randomPrivateKey());
+const priv1 = bytesToHex(secp256k1.utils.randomPrivateKey());
+const priv2 = bytesToHex(secp256k1.utils.randomPrivateKey());
+
+const pub0 = bytesToHex(secp256k1.getPublicKey(priv0, true)).slice(2);
+const pub1 = bytesToHex(secp256k1.getPublicKey(priv1, true)).slice(2);
+const pub2 = bytesToHex(secp256k1.getPublicKey(priv2, true)).slice(2);
+
+const ring = [pub0, pub1, pub2];
+const electionId = 'election-2026-q1';
+
+// Sign as ring member at index 0
+const sig = lsagSign('candidate-A', ring, 0, priv0, electionId);
+
+console.log(sig.keyImage); // deterministic 33-byte compressed point
+```
+
+---
+
+### `lsagVerify`
+
+```typescript
+function lsagVerify(sig: LsagSignature): boolean
+```
+
+Verifies an LSAG ring signature. Returns `true` if valid, `false` otherwise. Never throws.
+
+Also validates:
+- `keyImage` is a valid compressed secp256k1 point (02/03 prefix, 33 bytes)
+- `keyImage` is not the identity/zero point
+- `electionId` is a non-empty string
+
+**Example**
+
+```typescript
+import { lsagVerify } from '@forgesworn/ring-sig';
+
+const valid = lsagVerify(sig);
+console.log(valid); // true
+```
+
+---
+
+### `computeKeyImage`
+
+```typescript
+function computeKeyImage(
+  privateKey: string,
+  publicKey: string,
+  electionId: string,
+): string
+```
+
+Computes `I = x * H_p(P || electionId)` — the deterministic key image for a signer in a given election.
+
+Call this to obtain the key image before signing, or to check in advance whether a signer has already participated in an election.
+
+**Parameters**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `privateKey` | `string` | Signer's private key hex. |
+| `publicKey` | `string` | Signer's x-only public key hex (must match `privateKey`). |
+| `electionId` | `string` | Non-empty string identifying the election or context. |
+
+**Returns** the key image as a compressed point hex string (66 hex chars).
+
+**Throws** `ValidationError` if the private key does not match the public key, or if `electionId` is empty.
+
+**Example**
+
+```typescript
+import { computeKeyImage } from '@forgesworn/ring-sig';
+
+const image = computeKeyImage(priv0, pub0, 'election-2026-q1');
+// image is a 66-character hex string beginning with '02' or '03'
+```
+
+---
+
+### `hasDuplicateKeyImage`
+
+```typescript
+function hasDuplicateKeyImage(
+  keyImage: string,
+  existingImages: string[],
+): boolean
+```
+
+Constant-time check — returns `true` if `keyImage` appears in `existingImages`. Using constant-time comparison prevents timing side-channel attacks.
+
+Use this after verifying a signature to determine whether the signer has already participated in the election.
+
+**Parameters**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `keyImage` | `string` | Compressed point hex to search for. Must be a valid 02/03-prefixed 33-byte hex. |
+| `existingImages` | `string[]` | Array of previously seen key images (e.g. from a database of accepted votes). |
+
+**Returns** `boolean`.
+
+**Throws** `ValidationError` if `keyImage` is not in the expected compressed-point format.
+
+**Example**
+
+```typescript
+import { hasDuplicateKeyImage } from '@forgesworn/ring-sig';
+
+const seenImages: string[] = []; // load from your database
+
+if (hasDuplicateKeyImage(sig.keyImage, seenImages)) {
+  throw new Error('Duplicate vote detected');
+}
+
+// Accept the vote and record the key image
+seenImages.push(sig.keyImage);
+```
+
+---
+
+## Error Classes
+
+### `RingSignatureError`
+
+```typescript
+class RingSignatureError extends Error {
+  name: 'RingSignatureError';
+  constructor(message: string);
+}
+```
+
+Base class for all errors thrown by this library.
+
+### `ValidationError`
+
+```typescript
+class ValidationError extends RingSignatureError {
+  name: 'ValidationError';
+  constructor(message: string);
+}
+```
+
+Thrown for invalid inputs:
+- Ring has fewer than 2 members
+- Ring exceeds 1000 members
+- Ring contains duplicate public keys
+- `signerIndex` is out of bounds or not an integer
+- Private key does not match the claimed ring member
+- `electionId` is empty or not a string
+- Key image is not a valid compressed-point hex
+
+### `CryptoError`
+
+```typescript
+class CryptoError extends RingSignatureError {
+  name: 'CryptoError';
+  constructor(message: string);
+}
+```
+
+Thrown for cryptographic failures: invalid scalar, point not on curve, failed curve operations.
+
+---
+
+## Constants
+
+### `MAX_RING_SIZE`
+
+```typescript
+const MAX_RING_SIZE: number = 1000;
+```
+
+Exported from the top-level entry point. Maximum permitted ring members — a DoS guard against unbounded O(n) computation.
+
+---
+
+## Domain Separators
+
+Both `ringSign` and `lsagSign` include a `domain` parameter (defaults to `'sag-v1'` and `'lsag-v1'` respectively). Domain separators provide cross-protocol isolation: a signature produced under one domain cannot be replayed under another.
+
+Provide a custom domain if you need to namespace signatures per application:
+
+```typescript
+// Signatures from my-app-v1 cannot be replayed as my-other-app-v1 signatures
+const sig = ringSign(message, ring, index, privateKey, 'my-app-v1');
+```
+
+The domain string is included in every hash step of the challenge chain. Changing the domain breaks all existing signatures — treat it as a protocol constant once deployed.
+
+---
+
+## Cryptographic Design
+
+### SAG Construction
+
+Schnorr-based ring signature — a cyclic challenge chain:
+
+1. Signer picks random nonce `k`, computes `kG`.
+2. Computes `c_{pi+1} = H(domain, msg, ring, kG)`.
+3. For each non-signer ring member `i`: picks random `s_i`, computes `R_i = s_i*G + c_i*P_i`, then `c_{i+1} = H(domain, msg, ring, R_i)`.
+4. Closes the ring: `s_pi = k - c_pi * x (mod N)`.
+
+Verification recomputes the chain and checks that it closes: `c_n == c_0`.
+
+Signature size is O(n): one challenge scalar plus one response scalar per ring member.
+
+### LSAG Construction
+
+Extends SAG with a second point chain through `H_p(P_i || electionId)`:
+
+- Key image: `I = x * H_p(P_s || electionId)` (computed once, included in signature)
+- Each step computes both `L_i = s_i*G + c_i*P_i` and `R_i = s_i*H_p(P_i || electionId) + c_i*I`
+- Challenge: `c_{i+1} = H(domain, msg, ring, L_i, R_i)`
+
+The key image is deterministic: same private key + same electionId → identical image. Different electionIds → different, unlinkable images.
+
+### Hash-to-Point
+
+`H_p(data)` uses SHA-256 in a try-and-increment loop to derive a curve point from arbitrary bytes. The domain separator `'secp256k1-hash-to-point-v1'` is included to prevent cross-context collisions.
+
+### Length-Prefixed Hashing
+
+`hashToScalar` length-prefixes every input field before concatenation. This prevents domain-separation ambiguity when fields of variable length are concatenated.
+
+### Constant-Time Comparisons
+
+`hasDuplicateKeyImage` and internal challenge verification use constant-time byte comparison to prevent timing side-channel attacks. Never replace with `===` or `Buffer.equals`.
+
+---
+
+## Complete Usage Examples
+
+### Anonymous Group Membership Proof (SAG)
+
+```typescript
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { bytesToHex } from '@noble/hashes/utils';
+import { ringSign, ringVerify } from '@forgesworn/ring-sig';
+
+// Generate keys for a group of five
+const privKeys = Array.from({ length: 5 }, () =>
+  bytesToHex(secp256k1.utils.randomPrivateKey())
+);
+const pubKeys = privKeys.map(priv =>
+  bytesToHex(secp256k1.getPublicKey(priv, true)).slice(2)
+);
+
+// Member at index 3 proves membership without revealing which one
+const sig = ringSign(
+  'I witnessed the incident at 14:32 UTC',
+  pubKeys,
+  3,
+  privKeys[3],
+);
+
+// Any verifier can confirm a group member signed it
+console.log(ringVerify(sig)); // true
+console.log(sig.ring.length); // 5 — verifier knows the group, not the signer
+```
+
+### Anonymous Voting With Double-Vote Detection (LSAG)
+
+```typescript
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { bytesToHex } from '@noble/hashes/utils';
+import {
+  lsagSign,
+  lsagVerify,
+  computeKeyImage,
+  hasDuplicateKeyImage,
+} from '@forgesworn/ring-sig';
+
+// Eligible voters
+const voters = Array.from({ length: 10 }, () => {
+  const priv = bytesToHex(secp256k1.utils.randomPrivateKey());
+  const pub = bytesToHex(secp256k1.getPublicKey(priv, true)).slice(2);
+  return { priv, pub };
+});
+
+const ring = voters.map(v => v.pub);
+const electionId = 'community-vote-2026-q2';
+const acceptedKeyImages: string[] = [];
+
+// Voter 4 casts a vote
+const vote = lsagSign('option-B', ring, 4, voters[4].priv, electionId);
+
+if (!lsagVerify(vote)) throw new Error('Invalid signature');
+
+if (hasDuplicateKeyImage(vote.keyImage, acceptedKeyImages)) {
+  throw new Error('Duplicate vote rejected');
+}
+
+acceptedKeyImages.push(vote.keyImage);
+console.log('Vote accepted. Key image recorded.');
+
+// Voter 4 tries to vote again — detected
+const secondVote = lsagSign('option-A', ring, 4, voters[4].priv, electionId);
+
+if (lsagVerify(secondVote) && hasDuplicateKeyImage(secondVote.keyImage, acceptedKeyImages)) {
+  console.log('Double-vote detected and rejected.'); // this branch runs
+}
+```
+
+### Pre-Computing Key Images
+
+```typescript
+import { computeKeyImage } from '@forgesworn/ring-sig';
+
+// Compute before signing — useful to check eligibility first
+const image = computeKeyImage(voters[4].priv, voters[4].pub, electionId);
+
+// Check if this voter has already participated
+if (hasDuplicateKeyImage(image, acceptedKeyImages)) {
+  console.log('Voter has already participated in this election.');
+}
+```
+
+### Custom Domain Separation
+
+```typescript
+import { ringSign, lsagSign } from '@forgesworn/ring-sig';
+
+// Namespace signatures per application — prevents cross-context replay
+const sagSig = ringSign(message, ring, index, priv, 'my-app-sag-v1');
+const lsagSig = lsagSign(message, ring, index, priv, electionId, 'my-app-lsag-v1');
+```
+
+---
+
+## When to Use Each Variant
+
+| Requirement | Recommendation |
+|-------------|---------------|
+| Prove group membership — one-off, no linkability needed | SAG |
+| Anonymous attestation or whistleblowing | SAG |
+| Anonymous voting (one vote per person) | LSAG |
+| Rate-limiting anonymous actions per time window | LSAG |
+| Double-spend prevention in anonymous payment schemes | LSAG |
+| Constant-size signatures regardless of ring size | Neither — use a ZK-SNARK scheme |
+| Post-quantum resistance | Neither — secp256k1 is not post-quantum |
+
+## Dependencies
+
+Two runtime dependencies, both from the audited `@noble` family:
+
+- `@noble/curves` — secp256k1 point operations, private key generation
+- `@noble/hashes` — SHA-256, byte utilities
+
+No other runtime dependencies.
