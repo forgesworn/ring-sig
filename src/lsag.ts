@@ -2,7 +2,7 @@
 // Extends SAG with a key image that links signatures by the same signer
 // across multiple uses of the same election, enabling double-action detection.
 
-import { bytesToHex, hexToBytes, utf8ToBytes, concatBytes } from '@noble/hashes/utils';
+import { bytesToHex, hexToBytes, utf8ToBytes, concatBytes } from '@noble/hashes/utils.js';
 import { ValidationError } from './errors.js';
 import { constantTimeEqual } from './utils.js';
 import {
@@ -85,7 +85,7 @@ export function computeKeyImage(privateKey: string, publicKey: string, electionI
   }
   const Hp = hashPointForMember(publicKey, electionId);
   const I = Hp.multiply(x);
-  return bytesToHex(I.toRawBytes(true));
+  return bytesToHex(I.toBytes(true));
 }
 
 export function hasDuplicateKeyImage(keyImage: string, existingImages: string[]): boolean {
@@ -110,7 +110,7 @@ function challengeHash(
   L: ProjectivePoint,
   R: ProjectivePoint,
 ): bigint {
-  return hashToScalar(domain, msgBytes, ringBytes, L.toRawBytes(true), R.toRawBytes(true));
+  return hashToScalar(domain, msgBytes, ringBytes, L.toBytes(true), R.toBytes(true));
 }
 
 export function lsagSign(
@@ -157,7 +157,7 @@ export function lsagSign(
   // Key image: I = x * H_p(P_s || electionId)
   const HpSigner = hashPointForMember(ring[pi], electionId);
   const I = HpSigner.multiply(x);
-  const keyImage = bytesToHex(I.toRawBytes(true));
+  const keyImage = bytesToHex(I.toBytes(true));
 
   const alpha = randomScalar();
   const L_s = G.multiply(alpha);

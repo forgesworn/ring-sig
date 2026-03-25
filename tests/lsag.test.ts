@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { secp256k1, schnorr } from '@noble/curves/secp256k1';
-import { bytesToHex } from '@noble/hashes/utils';
+import { secp256k1, schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { MAX_RING_SIZE, computeKeyImage, lsagSign, lsagVerify, hasDuplicateKeyImage } from '../src/lsag.js';
 import { ValidationError } from '../src/errors.js';
 
 function generateKeyPair(): { privateKey: string; publicKey: string } {
-  const priv = secp256k1.utils.randomPrivateKey();
+  const priv = secp256k1.utils.randomSecretKey();
   const pub = schnorr.getPublicKey(priv);
   return { privateKey: bytesToHex(priv), publicKey: bytesToHex(pub) };
 }

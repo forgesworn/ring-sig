@@ -1,7 +1,7 @@
 // SAG Ring Signatures on secp256k1
 // Proves "one of N public keys signed this message" without revealing which one.
 
-import { utf8ToBytes, hexToBytes, concatBytes } from '@noble/hashes/utils';
+import { utf8ToBytes, hexToBytes, concatBytes } from '@noble/hashes/utils.js';
 import {
   Point,
   N,
@@ -116,7 +116,7 @@ export function ringSign(
     domainBytes,
     msgBytes,
     concatBytes(...ring.map(k => hexToBytes(k))),
-    kG.toRawBytes(true)
+    kG.toBytes(true)
   );
 
   // Step 3: For i = pi+1, pi+2, ..., pi-1 (mod n): fill in random responses and compute challenges
@@ -136,7 +136,7 @@ export function ringSign(
         domainBytes,
         msgBytes,
         concatBytes(...ring.map(k => hexToBytes(k))),
-        R.toRawBytes(true)
+        R.toBytes(true)
       );
     }
   }
@@ -190,7 +190,7 @@ export function ringVerify(sig: RingSignature): boolean {
         domainBytes,
         msgBytes,
         concatBytes(...ring.map(k => hexToBytes(k))),
-        R.toRawBytes(true)
+        R.toBytes(true)
       );
     }
 

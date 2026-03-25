@@ -37,8 +37,8 @@
     "url": "https://github.com/forgesworn/ring-sig.git"
   },
   "dependencies": {
-    "@noble/curves": "^1.8.1",
-    "@noble/hashes": "^1.7.1"
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",

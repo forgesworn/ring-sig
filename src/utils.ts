@@ -1,12 +1,12 @@
 // Shared secp256k1 utilities for sag.ts and lsag.ts.
 
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { sha256 } from '@noble/hashes/sha256';
-import { bytesToHex, hexToBytes, utf8ToBytes, concatBytes } from '@noble/hashes/utils';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex, hexToBytes, utf8ToBytes, concatBytes } from '@noble/hashes/utils.js';
 import { ValidationError, CryptoError } from './errors.js';
 
-export const Point = secp256k1.ProjectivePoint;
-export const N = secp256k1.CURVE.n;
+export const Point = secp256k1.Point;
+export const N = BigInt('0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141');
 export type ProjectivePoint = typeof Point.BASE;
 
 /** Constant-time comparison of two equal-length Uint8Arrays.
@@ -31,7 +31,7 @@ export function mod(a: bigint, m: bigint = N): bigint {
 export function randomScalar(): bigint {
   let s: bigint;
   do {
-    const bytes = secp256k1.utils.randomPrivateKey();
+    const bytes = secp256k1.utils.randomSecretKey();
     s = mod(BigInt('0x' + bytesToHex(bytes)));
   } while (s === 0n);
   return s;
