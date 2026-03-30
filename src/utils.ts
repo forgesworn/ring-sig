@@ -42,10 +42,12 @@ export function scalarToHex(s: bigint): string {
   return s.toString(16).padStart(64, '0');
 }
 
-/** Convert hex to bigint scalar, validated and reduced mod N */
+/** Convert hex to bigint scalar, validated and canonical (must be < N) */
 export function hexToScalar(hex: string): bigint {
   if (!/^[0-9a-f]{1,64}$/i.test(hex)) throw new ValidationError('Invalid scalar hex');
-  return mod(BigInt('0x' + hex));
+  const value = BigInt('0x' + hex);
+  if (value >= N) throw new ValidationError('Non-canonical scalar: value >= curve order N');
+  return value;
 }
 
 /** Constant-time equality check for two scalars (compared as 32-byte arrays) */
