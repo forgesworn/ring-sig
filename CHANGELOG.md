@@ -1,3 +1,14 @@
+# [3.0.0](https://github.com/forgesworn/ring-sig/compare/v2.0.0...v3.0.0) (2026-03-30)
+
+
+* fix!: reject non-canonical scalars >= curve order N in hexToScalar ([8eddf4f](https://github.com/forgesworn/ring-sig/commit/8eddf4f6255b6d4a1bd0d16e42772c2bf0c53b82))
+
+
+### BREAKING CHANGES
+
+* hexToScalar now throws for values >= N instead of
+silently reducing. Prevents non-canonical signature encodings.
+
 # [2.0.0](https://github.com/forgesworn/ring-sig/compare/v1.0.2...v2.0.0) (2026-03-25)
 
 
