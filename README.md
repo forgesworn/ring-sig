@@ -13,7 +13,7 @@ SAG and LSAG ring signatures on secp256k1.
 
 - **Anonymous group membership proofs** — prove you are one of N key holders without revealing which one
 - **Whistleblowing** — sign a statement as "a member of this organisation" without self-identifying
-- **Privacy-preserving attestation** — "a licensed professional verified this" without naming the professional
+- **Privacy-preserving attestation** — "a licensed professional verified this" without naming the professional (pairs with [nostr-attestations](https://github.com/forgesworn/nostr-attestations) for on-chain anonymous endorsements)
 - **Double-action prevention** (LSAG) — detect if the same key signs twice in the same context, without linking signatures across contexts
 
 ## Install
