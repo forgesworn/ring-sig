@@ -1,10 +1,4 @@
 {
-  "projectTitle": "ring-sig",
-  "description": "SAG and LSAG ring signatures on secp256k1 — prove group membership without revealing identity. Pure TypeScript.",
-  "excludeFolders": ["node_modules", "dist", "coverage", "src", "tests", ".github", ".changeset"],
-  "rules": [
-    "ring-sig uses @noble/curves v2 for elliptic curve operations.",
-    "SAG proves membership. LSAG adds linkability — use LSAG when you need to detect double-signing.",
-    "Ring size affects anonymity set — larger rings are more private but slower to verify."
-  ]
+  "url": "https://context7.com/forgesworn/ring-sig",
+  "public_key": "pk_vdoXns3QEblb1693KnlDH"
 }
