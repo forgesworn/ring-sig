@@ -2,7 +2,7 @@
 
 > SAG and LSAG ring signatures on secp256k1. Prove group membership without revealing identity, with optional double-action detection via linkable key images.
 
-Version: 2.0.0 (noble v2)
+Version: 3.0.0 (noble v2)
 Package: `@forgesworn/ring-sig`
 Repository: https://github.com/forgesworn/ring-sig
 Nostr: npub1mgvlrnf5hm9yf0n5mf9nqmvarhvxkc6remu5ec3vf8r0txqkuk7su0e7q2
