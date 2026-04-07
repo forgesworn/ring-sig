@@ -47,6 +47,19 @@ Always run `npm test` after changes. Always run `npm run typecheck` before commi
 - **No `Co-Authored-By`** lines in commits.
 - **Semantic-release on main** — every push to main auto-publishes. Work on branches; merge to main only when complete.
 
+## Release & Versioning
+
+**Automated via semantic-release** -- version bumps and npm publishing happen automatically when you push to `main`.
+
+| Type | Version Bump |
+|------|--------------|
+| `fix:` | Patch (1.0.x) |
+| `feat:` | Minor (1.x.0) |
+| `BREAKING CHANGE:` (in commit body) | Major (x.0.0) |
+| `chore:`, `docs:`, `refactor:` | None |
+
+Tests must pass before release. GitHub Actions uses OIDC trusted publishing. **Work on branches** -- merge to main only when a logical chunk is complete.
+
 ## Testing
 
 Tests are in `tests/`. Vitest is the runner. Tests cover:

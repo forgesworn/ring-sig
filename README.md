@@ -76,6 +76,23 @@ const sig = ringSign(message, ring, index, privateKey, 'my-app-v1');
 - Domain separation: `'sag-v1'`, `'lsag-v1'`, `'secp256k1-hash-to-point-v1'`
 - Maximum ring size: 1000 members
 
+## Part of the ForgeSworn Toolkit
+
+[ForgeSworn](https://forgesworn.dev) builds open-source cryptographic identity, payments, and coordination tools for Nostr.
+
+| Library | What it does |
+|---------|-------------|
+| [nsec-tree](https://github.com/forgesworn/nsec-tree) | Deterministic sub-identity derivation |
+| [ring-sig](https://github.com/forgesworn/ring-sig) | SAG/LSAG ring signatures on secp256k1 |
+| [range-proof](https://github.com/forgesworn/range-proof) | Pedersen commitment range proofs |
+| [canary-kit](https://github.com/forgesworn/canary-kit) | Coercion-resistant spoken verification |
+| [spoken-token](https://github.com/forgesworn/spoken-token) | Human-speakable verification tokens |
+| [toll-booth](https://github.com/forgesworn/toll-booth) | L402 payment middleware |
+| [geohash-kit](https://github.com/forgesworn/geohash-kit) | Geohash toolkit with polygon coverage |
+| [nostr-attestations](https://github.com/forgesworn/nostr-attestations) | NIP-VA verifiable attestations |
+| [dominion](https://github.com/forgesworn/dominion) | Epoch-based encrypted access control |
+| [nostr-veil](https://github.com/forgesworn/nostr-veil) | Privacy-preserving Web of Trust |
+
 ## Licence
 
 MIT
