@@ -2,6 +2,9 @@
 
 **Nostr:** [`npub1mgvlrnf5hm9yf0n5mf9nqmvarhvxkc6remu5ec3vf8r0txqkuk7su0e7q2`](https://njump.me/npub1mgvlrnf5hm9yf0n5mf9nqmvarhvxkc6remu5ec3vf8r0txqkuk7su0e7q2)
 
+[![npm](https://img.shields.io/npm/v/@forgesworn/ring-sig)](https://www.npmjs.com/package/@forgesworn/ring-sig)
+[![CI](https://github.com/forgesworn/ring-sig/actions/workflows/ci.yml/badge.svg)](https://github.com/forgesworn/ring-sig/actions/workflows/ci.yml)
+
 SAG and LSAG ring signatures on secp256k1.
 
 **Prove group membership without revealing identity.**

@@ -1,0 +1,37 @@
+# Cursor Rules — ring-sig
+
+SAG and LSAG ring signatures on secp256k1 — prove group membership without revealing identity.
+
+## Commands
+
+- `npm run build` — compile TypeScript to dist/
+- `npm test` — run all tests (vitest)
+- `npm run typecheck` — type-check without emitting
+
+## Conventions
+
+- British English — colour, initialise, behaviour, licence
+- ESM-only — all imports use `.js` extensions
+- TDD — write a failing test first, then implement
+- Commit messages — `type: description` format (feat:, fix:, docs:, chore:, refactor:). No Co-Authored-By lines.
+
+## Key Patterns
+
+- Domain separators (`'sag-v1'`, `'lsag-v1'`, `'secp256k1-hash-to-point-v1'`) are protocol constants — never change them
+- Nonces must be random (`secp256k1.utils.randomPrivateKey()`). Never use deterministic nonces
+- BIP-340 parity fix (negating `x` when `x*G` has odd y) is required for x-only pubkey compatibility
+- Length-prefixed hashing in `hashToScalar` prevents domain separation ambiguity
+- `constantTimeEqual` and `scalarEqual` prevent timing side-channels — do not replace with `===`
+- `safeMultiply` handles the `0n` edge case that `@noble/curves` rejects
+- Key images enforce compressed-point format (02/03 prefix) to prevent duplicate representations
+- Semantic-release on main — work on branches, merge only when complete
+
+## Structure
+
+- `src/sag.ts` — SAG: `ringSign`, `ringVerify`, `MAX_RING_SIZE`, `RingSignature`
+- `src/lsag.ts` — LSAG: `lsagSign`, `lsagVerify`, `computeKeyImage`, `hasDuplicateKeyImage`, `LsagSignature`
+- `src/utils.ts` — shared helpers: `hashToScalar`, `hashToPoint`, `randomScalar`, `safeMultiply`, `constantTimeEqual`
+- `src/errors.ts` — error hierarchy: `RingSignatureError` → `ValidationError`, `CryptoError`
+- `src/index.ts` — public API re-exports
+- `tests/` — vitest test suite (62 tests across 2 files)
+- `examples/` — runnable usage examples
