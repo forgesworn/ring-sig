@@ -1,30 +1,47 @@
 version: 2
+
+# Canonical dependabot config for npm/TypeScript repos in forgesworn.
+# Synced from forgesworn/.github/templates/dependabot/dependabot.npm.yml.
+# Edit the template, not individual repos -- run the propagator to sync.
+#
+# Tiering:
+#   patch + minor  -> grouped, auto-merged on green CI
+#   major          -> individual PR, manual review
+#   TS / Node / framework majors -> ignored here, upgraded deliberately
+
 updates:
-  # npm dependencies — ring-sig has runtime dependencies,
-  # so production bumps matter. Keep production and development
-  # groups separate so a runtime-dep bump doesn't hide inside
-  # a batch of devDep noise.
   - package-ecosystem: npm
     directory: "/"
     schedule:
       interval: weekly
       day: monday
-    open-pull-requests-limit: 5
-    groups:
-      production-dependencies:
-        dependency-type: production
-      dev-dependencies:
-        dependency-type: development
+    open-pull-requests-limit: 10
     commit-message:
       prefix: chore
       include: scope
-  # GitHub Actions references in .github/workflows. Monthly is
-  # frequent enough; a weekly cadence would produce mostly trivial
-  # SHA bumps.
+    groups:
+      production-minor:
+        dependency-type: production
+        update-types: ["patch", "minor"]
+      dev-minor:
+        dependency-type: development
+        update-types: ["patch", "minor"]
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: monthly
+    open-pull-requests-limit: 5
     commit-message:
       prefix: chore
       include: scope
+    groups:
+      actions-minor:
+        update-types: ["patch", "minor"]
