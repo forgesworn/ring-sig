@@ -4,6 +4,7 @@
 
 [![npm](https://img.shields.io/npm/v/@forgesworn/ring-sig)](https://www.npmjs.com/package/@forgesworn/ring-sig)
 [![CI](https://github.com/forgesworn/ring-sig/actions/workflows/ci.yml/badge.svg)](https://github.com/forgesworn/ring-sig/actions/workflows/ci.yml)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/TheCryptoDonkey?logo=githubsponsors&color=ea4aaa&label=Sponsor)](https://github.com/sponsors/TheCryptoDonkey)
 
 SAG and LSAG ring signatures on secp256k1.
 
