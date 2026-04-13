@@ -45,11 +45,11 @@ Always run `npm test` after changes. Always run `npm run typecheck` before commi
 - **ESM-only** — all imports use `.js` extensions.
 - **Commit messages**: `type: description` (e.g. `feat: add batch verification`, `fix: reject identity point as key image`).
 - **No `Co-Authored-By`** lines in commits.
-- **Semantic-release on main** — every push to main auto-publishes. Work on branches; merge to main only when complete.
+- **Anvil auto-release on main** — every push to main runs `forgesworn/anvil@v0` and auto-publishes. Work on branches; merge to main only when complete.
 
 ## Release & Versioning
 
-**Automated via semantic-release** -- version bumps and npm publishing happen automatically when you push to `main`.
+**Automated via [forgesworn/anvil](https://github.com/forgesworn/anvil)** -- `auto-release.yml` reads conventional commits on push to `main`, bumps the version, and creates a GitHub Release; `release.yml` then runs the pre-publish gates and publishes to npm via OIDC trusted publishing.
 
 | Type | Version Bump |
 |------|--------------|
@@ -58,7 +58,7 @@ Always run `npm test` after changes. Always run `npm run typecheck` before commi
 | `BREAKING CHANGE:` (in commit body) | Major (x.0.0) |
 | `chore:`, `docs:`, `refactor:` | None |
 
-Tests must pass before release. GitHub Actions uses OIDC trusted publishing. **Work on branches** -- merge to main only when a logical chunk is complete.
+Tests must pass before release. **Work on branches** -- merge to main only when a logical chunk is complete.
 
 ## Testing
 
