@@ -1,3 +1,9 @@
+## 3.0.2 (2026-07-18)
+
+### Security
+
+- publish the validated LSAG provider used by the shared Toll protocol
+
 # [3.0.0](https://github.com/forgesworn/ring-sig/compare/v2.0.0...v3.0.0) (2026-03-30)
 
 ## 3.0.1 (2026-04-12)
