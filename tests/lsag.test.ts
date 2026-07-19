@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { secp256k1, schnorr } from '@noble/curves/secp256k1.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
-import { MAX_RING_SIZE, computeKeyImage, lsagSign, lsagVerify, hasDuplicateKeyImage } from '../src/lsag.js';
+import { MAX_RING_SIZE, MAX_MESSAGE_BYTES, MAX_ELECTION_ID_BYTES, computeKeyImage, lsagSign, lsagVerify, hasDuplicateKeyImage } from '../src/lsag.js';
 import { ValidationError } from '../src/errors.js';
 
 function generateKeyPair(): { privateKey: string; publicKey: string } {
@@ -155,6 +155,60 @@ describe('LSAG', () => {
       const sig = lsagSign('test', ring, 0, signer.privateKey, electionId);
       const expected = computeKeyImage(signer.privateKey, signer.publicKey, electionId);
       expect(sig.keyImage).toBe(expected);
+    });
+  });
+
+  describe('encoding malleability (canonical scalar form)', () => {
+    it('rejects a re-encoded (upper-cased) twin of a valid signature', () => {
+      const sig = lsagSign('malleability', ring, 0, signer.privateKey, electionId);
+      expect(lsagVerify(sig)).toBe(true);
+
+      const fields = [sig.c0, ...sig.responses];
+      const idx = fields.findIndex((f) => /[a-f]/.test(f));
+      expect(idx).toBeGreaterThanOrEqual(0);
+      const twin = { ...sig, responses: [...sig.responses] };
+      if (idx === 0) twin.c0 = sig.c0.toUpperCase();
+      else twin.responses[idx - 1] = sig.responses[idx - 1].toUpperCase();
+
+      expect(lsagVerify(twin)).toBe(false);
+    });
+  });
+
+  describe('length caps (DoS bound)', () => {
+    it('signs and verifies a message at exactly MAX_MESSAGE_BYTES', () => {
+      const message = 'a'.repeat(MAX_MESSAGE_BYTES);
+      const sig = lsagSign(message, ring, 0, signer.privateKey, electionId);
+      expect(lsagVerify(sig)).toBe(true);
+    });
+
+    it('rejects an over-length message in lsagSign', () => {
+      const message = 'a'.repeat(MAX_MESSAGE_BYTES + 1);
+      expect(() => lsagSign(message, ring, 0, signer.privateKey, electionId))
+        .toThrow(`exceeds maximum of ${MAX_MESSAGE_BYTES} bytes`);
+    });
+
+    it('rejects an over-length message in lsagVerify', () => {
+      const sig = lsagSign('short', ring, 0, signer.privateKey, electionId);
+      sig.message = 'a'.repeat(MAX_MESSAGE_BYTES + 1);
+      expect(lsagVerify(sig)).toBe(false);
+    });
+
+    it('signs and verifies an electionId at exactly MAX_ELECTION_ID_BYTES', () => {
+      const bigElection = 'e'.repeat(MAX_ELECTION_ID_BYTES);
+      const sig = lsagSign('test', ring, 0, signer.privateKey, bigElection);
+      expect(lsagVerify(sig)).toBe(true);
+    });
+
+    it('rejects an over-length electionId in lsagSign', () => {
+      const bigElection = 'e'.repeat(MAX_ELECTION_ID_BYTES + 1);
+      expect(() => lsagSign('test', ring, 0, signer.privateKey, bigElection))
+        .toThrow(`exceeds maximum of ${MAX_ELECTION_ID_BYTES} bytes`);
+    });
+
+    it('rejects an over-length electionId in lsagVerify', () => {
+      const sig = lsagSign('test', ring, 0, signer.privateKey, electionId);
+      sig.electionId = 'e'.repeat(MAX_ELECTION_ID_BYTES + 1);
+      expect(lsagVerify(sig)).toBe(false);
     });
   });
 

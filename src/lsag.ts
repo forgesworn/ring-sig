@@ -33,6 +33,17 @@ export interface LsagSignature {
 /** Maximum number of members in a ring, to prevent denial-of-service via unbounded computation. */
 export const MAX_RING_SIZE = 1000;
 
+/** Maximum signed-message length in bytes. The verifier re-hashes the message
+ *  once per ring member, so unbounded message length would make verification
+ *  cost O(n·len) in attacker-controlled work. 64 KiB is far above any realistic
+ *  message while bounding worst-case verification work. */
+export const MAX_MESSAGE_BYTES = 65536;
+
+/** Maximum electionId length in bytes. electionId is hashed to a curve point
+ *  once per ring member during verification (O(n·len)), so it is bounded too.
+ *  An election identifier is small by nature; 512 bytes is generous. */
+export const MAX_ELECTION_ID_BYTES = 512;
+
 const DEFAULT_LSAG_DOMAIN = 'lsag-v1';
 
 function validatePubkeyHex(pubkeyHex: string): void {
@@ -125,6 +136,7 @@ export function lsagSign(
   if (!Array.isArray(ring)) throw new ValidationError('ring must be an array');
   if (typeof privateKey !== 'string') throw new ValidationError('privateKey must be a string');
   if (typeof electionId !== 'string' || !electionId) throw new ValidationError('electionId must be a non-empty string');
+  if (utf8ToBytes(electionId).length > MAX_ELECTION_ID_BYTES) throw new ValidationError(`electionId length exceeds maximum of ${MAX_ELECTION_ID_BYTES} bytes`);
   if (ring.length < 2) throw new ValidationError('Ring must have at least 2 members');
   if (ring.length > MAX_RING_SIZE) throw new ValidationError(`Ring size ${ring.length} exceeds maximum of ${MAX_RING_SIZE}`);
   if (!Number.isInteger(signerIndex)) throw new ValidationError('Signer index must be an integer');
@@ -137,6 +149,7 @@ export function lsagSign(
   const pi = signerIndex;
   let x = hexToScalar(privateKey);
   const msgBytes = utf8ToBytes(message);
+  if (msgBytes.length > MAX_MESSAGE_BYTES) throw new ValidationError(`Message length ${msgBytes.length} exceeds maximum of ${MAX_MESSAGE_BYTES} bytes`);
   const domainBytes = utf8ToBytes(domain);
   const ringBytes = concatBytes(...ring.map(k => hexToBytes(k)));
   const ringPoints = ring.map(pubkeyToPoint);
@@ -198,6 +211,7 @@ export function lsagVerify(sig: LsagSignature): boolean {
   try {
     const { keyImage, c0, responses, message, electionId } = sig;
     if (typeof electionId !== 'string' || !electionId) return false;
+    if (utf8ToBytes(electionId).length > MAX_ELECTION_ID_BYTES) return false;
     const ring = sig.ring.map(pk => pk.toLowerCase());
     const domain = sig.domain ?? DEFAULT_LSAG_DOMAIN;
     if (ring.length < 2) return false;
@@ -215,6 +229,7 @@ export function lsagVerify(sig: LsagSignature): boolean {
 
     const n = ring.length;
     const msgBytes = utf8ToBytes(message);
+    if (msgBytes.length > MAX_MESSAGE_BYTES) return false;
     const domainBytes = utf8ToBytes(domain);
     const ringBytes = concatBytes(...ring.map(k => hexToBytes(k)));
     const ringPoints = ring.map(pubkeyToPoint);

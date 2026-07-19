@@ -42,9 +42,15 @@ export function scalarToHex(s: bigint): string {
   return s.toString(16).padStart(64, '0');
 }
 
-/** Convert hex to bigint scalar, validated and canonical (must be < N) */
+/** Convert hex to bigint scalar, validated and canonical (must be < N).
+ *
+ *  Requires exactly 64 lowercase hex characters. This canonical form prevents
+ *  encoding malleability: without it, re-encoded twins of a valid scalar
+ *  (upper-cased digits, or a stripped leading-zero nibble) would decode to the
+ *  same value and verify identically. `scalarToHex` always emits 64-char
+ *  lowercase, so no legitimately-produced signature is rejected. */
 export function hexToScalar(hex: string): bigint {
-  if (!/^[0-9a-f]{1,64}$/i.test(hex)) throw new ValidationError('Invalid scalar hex');
+  if (!/^[0-9a-f]{64}$/.test(hex)) throw new ValidationError('Invalid scalar hex: expected exactly 64 lowercase hex chars');
   const value = BigInt('0x' + hex);
   if (value >= N) throw new ValidationError('Non-canonical scalar: value >= curve order N');
   return value;
