@@ -194,6 +194,10 @@ export function lsagSign(
     }
   }
 
+  // KNOWN LIMITATION (see SECURITY.md, "Not constant-time"): `challenges[pi] * x`
+  // multiplies the private key x with native BigInt (variable-time) — the only
+  // non-constant-time operation touching the secret. A real fix needs a
+  // constant-time scalar backend; JS BigInt cannot provide one, so it is documented.
   responses[pi] = mod(alpha - mod(challenges[pi] * x));
 
   return {

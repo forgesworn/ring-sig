@@ -32,7 +32,7 @@ Cryptographic primitives are provided by audited libraries:
 ## Known Limitations
 
 - **O(n) signature size** -- signature size grows linearly with the number of ring members (maximum ring size: 1000).
-- **Not constant-time in all operations** -- while constant-time comparisons are used for sensitive values, some higher-level operations may leak timing information about the ring structure.
+- **Not constant-time in all operations** -- constant-time comparisons are used for sensitive values, and EC scalar multiplications go through noble's constant-time `multiply`. The one exception is the closing response `c_pi * x (mod N)` (`sag.ts` / `lsag.ts`), where the private key `x` is multiplied by the public challenge with native **BigInt**, which is variable-time -- the sole non-constant-time operation touching the secret. Fixing it requires a constant-time scalar backend that JS BigInt cannot provide; a marginal scalar blind was considered and rejected as not clearly effective, so this is an accepted, documented limitation.
 - **Not post-quantum** -- ring signatures on secp256k1 are vulnerable to quantum attacks on the discrete logarithm problem.
 
 ## Reporting Vulnerabilities

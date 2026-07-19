@@ -149,6 +149,12 @@ export function ringSign(
   }
 
   // Step 4: Compute s_pi = k - c_pi * x (mod N)
+  // KNOWN LIMITATION (see SECURITY.md, "Not constant-time"): `challenges[pi] * x`
+  // multiplies the private key x with native BigInt, which is variable-time — the
+  // only non-constant-time operation touching the secret. A high-resolution timing
+  // observer of the signer could, in principle, bias key recovery. A real fix
+  // needs a constant-time scalar backend (JS BigInt cannot provide one), so this
+  // is documented rather than papered over with a marginal blind.
   responses[pi] = mod(k - mod(challenges[pi] * x));
 
   return {
