@@ -6,6 +6,14 @@
 
 # [3.0.0](https://github.com/forgesworn/ring-sig/compare/v2.0.0...v3.0.0) (2026-03-30)
 
+## 3.0.3 (2026-07-19)
+
+### Bug Fixes
+
+- enforce canonical scalar hex and cap message/electionId length (#22)
+
+
+
 ## 3.0.1 (2026-04-12)
 
 ### Bug Fixes
