@@ -3,6 +3,7 @@ import { secp256k1, schnorr } from '@noble/curves/secp256k1.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import {
   MAX_RING_SIZE,
+  MAX_MESSAGE_BYTES,
   ringSign,
   ringVerify,
 } from '../src/sag.js';
@@ -125,6 +126,61 @@ describe('ring-signature (SAG)', () => {
       expect(ringVerify(sig)).toBe(true);
       // Tamper domain to B — must fail
       sig.domain = 'domain-B';
+      expect(ringVerify(sig)).toBe(false);
+    });
+  });
+
+  describe('encoding malleability (canonical scalar form)', () => {
+    it('rejects a re-encoded (upper-cased) twin of a valid signature', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const sig = ringSign('malleability', pubkeys, 0, keys[0].privateKey);
+      expect(ringVerify(sig)).toBe(true);
+
+      // Upper-case the first scalar field that contains a hex letter — the same
+      // integer, a different encoding. A malleable verifier would accept it.
+      const fields = [sig.c0, ...sig.responses];
+      const idx = fields.findIndex((f) => /[a-f]/.test(f));
+      expect(idx).toBeGreaterThanOrEqual(0); // essentially always true for random scalars
+      const twin = { ...sig, responses: [...sig.responses] };
+      if (idx === 0) twin.c0 = sig.c0.toUpperCase();
+      else twin.responses[idx - 1] = sig.responses[idx - 1].toUpperCase();
+
+      expect(ringVerify(twin)).toBe(false);
+    });
+
+    it('rejects a stripped leading-zero-nibble twin of c0', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const sig = ringSign('strip', pubkeys, 0, keys[0].privateKey);
+      // A 63-char encoding of the same value must be rejected as non-canonical.
+      const shortC0 = BigInt('0x' + sig.c0).toString(16); // no padStart -> may drop leading zeros
+      const twin = { ...sig, c0: shortC0 };
+      if (shortC0.length !== 64) {
+        expect(ringVerify(twin)).toBe(false);
+      }
+      // The canonical original always verifies.
+      expect(ringVerify(sig)).toBe(true);
+    });
+  });
+
+  describe('message length cap (DoS bound)', () => {
+    it('signs and verifies a message at exactly MAX_MESSAGE_BYTES', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const message = 'a'.repeat(MAX_MESSAGE_BYTES);
+      const sig = ringSign(message, pubkeys, 0, keys[0].privateKey);
+      expect(ringVerify(sig)).toBe(true);
+    });
+
+    it('rejects an over-length message in ringSign', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const message = 'a'.repeat(MAX_MESSAGE_BYTES + 1);
+      expect(() => ringSign(message, pubkeys, 0, keys[0].privateKey))
+        .toThrow(`exceeds maximum of ${MAX_MESSAGE_BYTES} bytes`);
+    });
+
+    it('rejects an over-length message in ringVerify', () => {
+      const { keys, pubkeys } = makeRing(3);
+      const sig = ringSign('short', pubkeys, 0, keys[0].privateKey);
+      sig.message = 'a'.repeat(MAX_MESSAGE_BYTES + 1);
       expect(ringVerify(sig)).toBe(false);
     });
   });

@@ -19,6 +19,12 @@ import { ValidationError } from './errors.js';
 /** Maximum number of members in a ring, to prevent denial-of-service via unbounded computation. */
 export const MAX_RING_SIZE = 1000;
 
+/** Maximum signed-message length in bytes. The verifier re-hashes the message
+ *  once per ring member, so unbounded message length would make verification
+ *  cost O(n·len) in attacker-controlled work. 64 KiB is far above any realistic
+ *  message while bounding worst-case verification work. */
+export const MAX_MESSAGE_BYTES = 65536;
+
 const DEFAULT_SAG_DOMAIN = 'sag-v1';
 
 /** A ring signature: starting challenge + response scalars */
@@ -84,6 +90,7 @@ export function ringSign(
   const pi = signerIndex;
   let x = hexToScalar(privateKey);
   const msgBytes = utf8ToBytes(message);
+  if (msgBytes.length > MAX_MESSAGE_BYTES) throw new ValidationError(`Message length ${msgBytes.length} exceeds maximum of ${MAX_MESSAGE_BYTES} bytes`);
   const domainBytes = utf8ToBytes(domain);
 
   // Load ring public keys as curve points
@@ -172,6 +179,7 @@ export function ringVerify(sig: RingSignature): boolean {
 
     const n = ring.length;
     const msgBytes = utf8ToBytes(message);
+    if (msgBytes.length > MAX_MESSAGE_BYTES) return false;
     const domainBytes = utf8ToBytes(domain);
     const ringPoints = ring.map(pubkeyToPoint);
 
