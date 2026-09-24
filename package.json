@@ -12,7 +12,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "llms.txt",
+    "llms-full.txt"
   ],
   "scripts": {
     "build": "tsc",
