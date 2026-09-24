@@ -2,7 +2,6 @@
 
 > SAG and LSAG ring signatures on secp256k1. Prove group membership without revealing identity, with optional double-action detection via linkable key images.
 
-Version: 3.0.0 (noble v2)
 Package: `@forgesworn/ring-sig`
 Repository: https://github.com/forgesworn/ring-sig
 Nostr: npub1mgvlrnf5hm9yf0n5mf9nqmvarhvxkc6remu5ec3vf8r0txqkuk7su0e7q2
@@ -108,9 +107,9 @@ import { secp256k1 } from '@noble/curves/secp256k1';
 import { bytesToHex } from '@noble/hashes/utils';
 import { ringSign } from '@forgesworn/ring-sig';
 
-const priv0 = bytesToHex(secp256k1.utils.randomPrivateKey());
-const priv1 = bytesToHex(secp256k1.utils.randomPrivateKey());
-const priv2 = bytesToHex(secp256k1.utils.randomPrivateKey());
+const priv0 = bytesToHex(secp256k1.utils.randomSecretKey());
+const priv1 = bytesToHex(secp256k1.utils.randomSecretKey());
+const priv2 = bytesToHex(secp256k1.utils.randomSecretKey());
 
 // x-only public keys (drop the 02/03 prefix from compressed form)
 const pub0 = bytesToHex(secp256k1.getPublicKey(priv0, true)).slice(2);
@@ -225,9 +224,9 @@ import { secp256k1 } from '@noble/curves/secp256k1';
 import { bytesToHex } from '@noble/hashes/utils';
 import { lsagSign } from '@forgesworn/ring-sig';
 
-const priv0 = bytesToHex(secp256k1.utils.randomPrivateKey());
-const priv1 = bytesToHex(secp256k1.utils.randomPrivateKey());
-const priv2 = bytesToHex(secp256k1.utils.randomPrivateKey());
+const priv0 = bytesToHex(secp256k1.utils.randomSecretKey());
+const priv1 = bytesToHex(secp256k1.utils.randomSecretKey());
+const priv2 = bytesToHex(secp256k1.utils.randomSecretKey());
 
 const pub0 = bytesToHex(secp256k1.getPublicKey(priv0, true)).slice(2);
 const pub1 = bytesToHex(secp256k1.getPublicKey(priv1, true)).slice(2);
@@ -374,8 +373,10 @@ Thrown for invalid inputs:
 - Ring contains duplicate public keys
 - `signerIndex` is out of bounds or not an integer
 - Private key does not match the claimed ring member
-- `electionId` is empty or not a string
+- `electionId` is empty or not a string, or exceeds 512 bytes
 - Key image is not a valid compressed-point hex
+- `message` exceeds 65536 bytes
+- A private key or `c0`/response scalar is non-canonical (not a valid 64-character lowercase hex value less than the curve order N)
 
 ### `CryptoError`
 
@@ -454,6 +455,8 @@ The key image is deterministic: same private key + same electionId → identical
 
 `hasDuplicateKeyImage` and internal challenge verification use constant-time byte comparison to prevent timing side-channel attacks. Never replace with `===` or `Buffer.equals`.
 
+**Known limitation** (see SECURITY.md, "Not constant-time"): the closing response `challenges[pi] * x` in `ringSign`/`lsagSign` uses native BigInt multiplication, which is variable-time. This is the one operation touching the secret that is not constant-time; a constant-time fix would need a scalar backend JS BigInt cannot provide, so it is an accepted, documented limitation.
+
 ---
 
 ## Complete Usage Examples
@@ -467,7 +470,7 @@ import { ringSign, ringVerify } from '@forgesworn/ring-sig';
 
 // Generate keys for a group of five
 const privKeys = Array.from({ length: 5 }, () =>
-  bytesToHex(secp256k1.utils.randomPrivateKey())
+  bytesToHex(secp256k1.utils.randomSecretKey())
 );
 const pubKeys = privKeys.map(priv =>
   bytesToHex(secp256k1.getPublicKey(priv, true)).slice(2)
@@ -500,7 +503,7 @@ import {
 
 // Eligible voters
 const voters = Array.from({ length: 10 }, () => {
-  const priv = bytesToHex(secp256k1.utils.randomPrivateKey());
+  const priv = bytesToHex(secp256k1.utils.randomSecretKey());
   const pub = bytesToHex(secp256k1.getPublicKey(priv, true)).slice(2);
   return { priv, pub };
 });
