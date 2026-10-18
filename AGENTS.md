@@ -19,21 +19,23 @@ Instructions in this file apply to the entire repository.
 
 ## Repository Structure
 
-- `src/sag.ts`: SAG (Spontaneous Anonymous Group): `ringSign`, `ringVerify`, `MAX_RING_SIZE`, `RingSignature`
-- `src/lsag.ts`: LSAG (Linkable SAG): `lsagSign`, `lsagVerify`, `computeKeyImage`, `hasDuplicateKeyImage`, `LsagSignature`
+- `src/sag.ts`: SAG (Spontaneous Anonymous Group): `ringSign`, `ringVerify`, `MAX_RING_SIZE`, `MAX_MESSAGE_BYTES`, `RingSignature`
+- `src/lsag.ts`: LSAG (Linkable SAG): `lsagSign`, `lsagVerify`, `computeKeyImage`, `hasDuplicateKeyImage`, `LsagSignature`, plus its own `MAX_RING_SIZE`, `MAX_MESSAGE_BYTES`, `MAX_ELECTION_ID_BYTES`
 - `src/utils.ts`: shared crypto helpers: `hashToScalar`, `hashToPoint`, `randomScalar`, `safeMultiply`, `constantTimeEqual`, `scalarEqual`
 - `src/errors.ts`: error hierarchy: `RingSignatureError` → `ValidationError`, `CryptoError`
-- `src/index.ts`: public API barrel re-export
+- `src/index.ts`: public API barrel re-export. Of the constants only `MAX_RING_SIZE` (from `sag.ts`) is exported; `MAX_MESSAGE_BYTES` and `MAX_ELECTION_ID_BYTES` are not part of the public API
 - `tests/sag.test.ts`: SAG test suite
 - `tests/lsag.test.ts`: LSAG test suite
 - `examples/`: runnable usage examples (`basic-sag.ts`, `basic-lsag.ts`, `voting-lsag.ts`, `sig-sizes.ts`)
+- `llms.txt`, `llms-full.txt`: AI-facing API summary and full reference; both ship in the npm package (`files`) and must agree with the source
+- `CHANGELOG.md`: version history and migration notes (also shipped via `files`)
 - `dist/`: build output (generated, do not edit by hand)
 
 ## Data Flow
 
 - Public keys are x-only hex (32 bytes, 64 hex chars) per BIP-340. Internally
   converted to curve points via `'02' + hex` (even y).
-- Private keys are 32-byte hex scalars, reduced mod N.
+- Private keys are 32-byte hex scalars: exactly 64 lowercase hex characters and below N. Values at or above N are rejected with `ValidationError`, not reduced. Signature scalars (`c0`, `responses`) follow the same rule; public key hex is case-insensitive.
 - SAG: Schnorr-based ring, cyclic challenge chain `c_0 → c_1 → ... → c_0`.
 - LSAG: extends SAG with a second chain through `H_p(P || electionId)` and the
   key image `I = x * H_p(P || electionId)`. The key image is deterministic:
@@ -45,7 +47,7 @@ Instructions in this file apply to the entire repository.
 - British English in all identifiers and prose: `colour`, `initialise`, `behaviour`, `licence`.
 - ESM-only: all imports use `.js` extensions. Do not use CommonJS.
 - TDD: write a failing test first, then implement.
-- All public APIs validate inputs and throw typed errors (`ValidationError` or `CryptoError`).
+- `ringSign`, `lsagSign`, `computeKeyImage` and `hasDuplicateKeyImage` validate inputs and throw `ValidationError` (a non-curve-point ring entry surfaces noble's own error, a non-string ring entry a `TypeError`). `ringVerify` and `lsagVerify` never throw; they return `false`. `CryptoError` is reserved for internal cryptographic failure.
 - Constant-time comparisons (`constantTimeEqual`, `scalarEqual`) for any secret comparison; never `===` or `Buffer.equals`.
 - `safeMultiply` must be used instead of bare `.multiply()` to handle the `0n` scalar edge case.
 - Commit messages: `type: description` (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`). No `Co-Authored-By` lines.
@@ -54,6 +56,7 @@ Instructions in this file apply to the entire repository.
 
 - Run `npm test` after every change. Run `npm run typecheck` before committing.
 - Do not edit generated output in `dist/` by hand.
+- Verify functions read `sig.domain` (falling back to `'sag-v1'` / `'lsag-v1'`) and have no expected-domain parameter; callers pin the domain themselves. Keep the docs saying so.
 - Never change domain separators (`'sag-v1'`, `'lsag-v1'`, `'secp256k1-hash-to-point-v1'`): they are protocol constants and changing them breaks all existing signatures.
 - Never use deterministic nonces (always `randomScalar()`, backed by `secp256k1.utils.randomSecretKey()`): reusing a nonce leaks the private key.
 - Do not remove the BIP-340 parity fix (negating `x` when `x*G` has odd y): it is required for x-only pubkey compatibility.
