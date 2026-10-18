@@ -9,6 +9,13 @@ The public API surface (exports, function signatures) is unchanged between v2 an
 
 Public keys remain case-insensitive x-only hex. Verification does not check which ring, message, `electionId` or domain you expect; see the README for the checks a verifier should make.
 
+## 3.0.4 (2026-10-18)
+
+### Bug Fixes
+
+- make usage examples runnable and document verifier behaviour (#34) (docs)
+
+
 ## 3.0.3 (2026-07-19)
 
 ### Bug Fixes
@@ -28,14 +35,6 @@ Public keys remain case-insensitive x-only hex. Verification does not check whic
 - bump vite to 7.3.2 and picomatch to 4.0.4 (security) (deps)
 
 # [3.0.0](https://github.com/forgesworn/ring-sig/compare/v2.0.0...v3.0.0) (2026-03-30)
-
-## 3.0.4 (2026-10-18)
-
-### Bug Fixes
-
-- make usage examples runnable and document verifier behaviour (#34) (docs)
-
-
 
 
 * fix!: reject non-canonical scalars >= curve order N in hexToScalar ([8eddf4f](https://github.com/forgesworn/ring-sig/commit/8eddf4f6255b6d4a1bd0d16e42772c2bf0c53b82))
