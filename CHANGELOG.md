@@ -1,18 +1,25 @@
-## 3.0.2 (2026-07-18)
+## Migrating from v2 to v3
 
-### Security
+The public API surface (exports, function signatures) is unchanged between v2 and v3. What changed is input validation, so code that passed hand-built values may now be rejected:
 
-- publish the validated LSAG provider used by the shared Toll protocol
+- **Scalar hex is strict** (3.0.0, tightened in 3.0.3). Private keys, `c0` and `responses` must be exactly 64 lowercase hex characters and below the curve order N. v2 accepted 1 to 64 hex characters in either case and reduced values at or above N modulo N; 3.0.0 started rejecting values at or above N, and 3.0.3 requires the full 64-character lowercase form. Lowercase and left-pad any private key you store in another form. Signing functions throw `ValidationError`; the verify functions return `false`.
+- **Signatures made by this library still verify.** The library has always emitted 64-character lowercase scalars, so stored signatures are unaffected. Only hand-encoded or re-encoded scalars (upper-cased, or with a stripped leading zero) are rejected.
+- **Length caps** (3.0.3). `message` is limited to 65536 UTF-8 bytes and `electionId` to 512 UTF-8 bytes in `lsagSign` and `lsagVerify`. Earlier versions were unbounded, so a signature over longer inputs no longer verifies.
+- **Dependencies.** v2 moved to `@noble/curves` v2 and `@noble/hashes` v2. If your own code imports from them, import paths need the `.js` suffix (for example `@noble/curves/secp256k1.js`).
 
-# [3.0.0](https://github.com/forgesworn/ring-sig/compare/v2.0.0...v3.0.0) (2026-03-30)
+Public keys remain case-insensitive x-only hex. Verification does not check which ring, message, `electionId` or domain you expect; see the README for the checks a verifier should make.
 
 ## 3.0.3 (2026-07-19)
 
 ### Bug Fixes
 
-- enforce canonical scalar hex and cap message/electionId length (#22)
+- enforce canonical scalar hex (exactly 64 lowercase hex characters) and cap message (65536 bytes) and electionId (512 bytes) length (#22)
 
+## 3.0.2 (2026-07-18)
 
+### Security
+
+- publish the validated LSAG provider used by the shared Toll protocol
 
 ## 3.0.1 (2026-04-12)
 
@@ -20,7 +27,7 @@
 
 - bump vite to 7.3.2 and picomatch to 4.0.4 (security) (deps)
 
-
+# [3.0.0](https://github.com/forgesworn/ring-sig/compare/v2.0.0...v3.0.0) (2026-03-30)
 
 
 * fix!: reject non-canonical scalars >= curve order N in hexToScalar ([8eddf4f](https://github.com/forgesworn/ring-sig/commit/8eddf4f6255b6d4a1bd0d16e42772c2bf0c53b82))

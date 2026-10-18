@@ -24,11 +24,37 @@ Two variants are provided:
 
 ## Key Format Conventions
 
-All public keys are **x-only hex** — 32 bytes, 64 hex characters, following the BIP-340 convention used by Nostr and Bitcoin Taproot. Internally the library prepends `02` (even y-coordinate) to convert to a compressed point.
+All public keys are **x-only hex**: 32 bytes, 64 hex characters, following the BIP-340 convention used by Nostr and Bitcoin Taproot. Public key hex is case-insensitive; the library normalises it to lowercase (signatures carry the lowercase ring). Internally the library prepends `02` (even y-coordinate) to convert to a compressed point.
 
-Private keys are standard 32-byte hex scalars.
+Private keys are standard 32-byte scalars as hex, and must be **exactly 64 lowercase hex characters, below the curve order N**. Uppercase, short or oversized hex, and values at or above N, throw `ValidationError` (they are rejected, not reduced). The same rule applies to the `c0` and `responses` scalars of a signature; signatures produced by this library always satisfy it.
 
 The library applies a BIP-340 parity fix: if `x*G` has odd y, `x` is negated before use, ensuring the derived public key always matches the stored x-only form.
+
+### Generating keys
+
+`@noble/curves` and `@noble/hashes` are dependencies of this package; add them to your own `package.json` if you import them directly. Import paths need the `.js` suffix, and `getPublicKey` takes bytes, not a hex string. `schnorr.getPublicKey` returns the x-only public key directly:
+
+```typescript
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
+
+const keyPairs = Array.from({ length: 3 }, () => {
+  const secretKey = schnorr.utils.randomSecretKey();
+  return {
+    privateKey: bytesToHex(secretKey), // 64 lowercase hex characters
+    publicKey: bytesToHex(schnorr.getPublicKey(secretKey)), // x-only, 64 hex characters
+  };
+});
+const ring = keyPairs.map(k => k.publicKey);
+```
+
+### Input limits
+
+| Input | Limit |
+|-------|-------|
+| `ring` | 2 to 1000 members, no duplicates (`MAX_RING_SIZE`) |
+| `message` | string, at most 65536 UTF-8 bytes |
+| `electionId` | non-empty string, at most 512 UTF-8 bytes (enforced by `lsagSign` and `lsagVerify`) |
 
 ## Entry Point
 
@@ -48,6 +74,8 @@ import {
   MAX_RING_SIZE,
 } from '@forgesworn/ring-sig';
 ```
+
+`MAX_MESSAGE_BYTES` and `MAX_ELECTION_ID_BYTES` exist in the source modules but are not exported from the entry point.
 
 ---
 
@@ -88,38 +116,36 @@ Produces a SAG ring signature. The signer proves membership in `ring` without re
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `message` | `string` | Message to sign. Hashed internally — any UTF-8 string. |
+| `message` | `string` | Message to sign. Hashed internally. Any UTF-8 string, at most 65536 bytes. |
 | `ring` | `string[]` | Array of x-only public key hex strings (32 bytes each). Minimum 2, maximum 1000. Must have no duplicates. |
 | `signerIndex` | `number` | Integer index of the actual signer in `ring`. Must satisfy `0 <= signerIndex < ring.length`. |
-| `privateKey` | `string` | Signer's private key as hex. Must correspond to `ring[signerIndex]`. |
-| `domain` | `string` | Optional domain separator for cross-protocol isolation. Defaults to `'sag-v1'`. |
+| `privateKey` | `string` | Signer's private key: 64 lowercase hex characters below the curve order. Must correspond to `ring[signerIndex]`. |
+| `domain` | `string` | Optional 5th argument: domain separator for cross-protocol isolation. Defaults to `'sag-v1'`. Verifiers read it from the signature; see Domain Separators. |
 
 **Returns** a `RingSignature` object. The signature is serialisable to JSON.
 
 **Throws**
-- `ValidationError` — ring too small/large, duplicate members, index out of range, key mismatch.
-- `CryptoError` — invalid key or curve operation failure.
+- `ValidationError`: ring too small/large, duplicate members, index out of range or not an integer, private key not 64 lowercase hex or not below the curve order, key mismatch, message over 65536 bytes.
+- A ring entry that is not a valid x-only curve point surfaces the underlying `@noble/curves` error, and a non-string ring entry a `TypeError`.
 
 **Example**
 
 ```typescript
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { bytesToHex } from '@noble/hashes/utils';
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { ringSign } from '@forgesworn/ring-sig';
 
-const priv0 = bytesToHex(secp256k1.utils.randomSecretKey());
-const priv1 = bytesToHex(secp256k1.utils.randomSecretKey());
-const priv2 = bytesToHex(secp256k1.utils.randomSecretKey());
-
-// x-only public keys (drop the 02/03 prefix from compressed form)
-const pub0 = bytesToHex(secp256k1.getPublicKey(priv0, true)).slice(2);
-const pub1 = bytesToHex(secp256k1.getPublicKey(priv1, true)).slice(2);
-const pub2 = bytesToHex(secp256k1.getPublicKey(priv2, true)).slice(2);
-
-const ring = [pub0, pub1, pub2];
+const keyPairs = Array.from({ length: 3 }, () => {
+  const secretKey = schnorr.utils.randomSecretKey();
+  return {
+    privateKey: bytesToHex(secretKey),
+    publicKey: bytesToHex(schnorr.getPublicKey(secretKey)), // x-only
+  };
+});
+const ring = keyPairs.map(k => k.publicKey);
 
 // Sign as ring member at index 1 — identity hidden from verifier
-const sig = ringSign('Hello, world!', ring, 1, priv1);
+const sig = ringSign('Hello, world!', ring, 1, keyPairs[1].privateKey);
 
 // Serialisable — safe to send over the wire
 console.log(JSON.stringify(sig));
@@ -133,7 +159,9 @@ console.log(JSON.stringify(sig));
 function ringVerify(sig: RingSignature): boolean
 ```
 
-Verifies a SAG ring signature. Returns `true` if valid, `false` otherwise. Never throws — all errors are caught and returned as `false`.
+Verifies a SAG ring signature. Returns `true` if valid, `false` otherwise. Never throws: all errors (including a `null` or otherwise malformed `sig`) are caught and returned as `false`.
+
+The domain is taken from `sig.domain`, or `'sag-v1'` when that field is absent. There is no expected-domain parameter. Verification only proves the signature is consistent with the ring, message and domain it carries; it does not know which ring, message or domain you expect. See Domain Separators and the Verifier Checklist.
 
 **Parameters**
 
@@ -146,7 +174,19 @@ Verifies a SAG ring signature. Returns `true` if valid, `false` otherwise. Never
 **Example**
 
 ```typescript
-import { ringVerify } from '@forgesworn/ring-sig';
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
+import { ringSign, ringVerify } from '@forgesworn/ring-sig';
+
+const keyPairs = Array.from({ length: 3 }, () => {
+  const secretKey = schnorr.utils.randomSecretKey();
+  return {
+    privateKey: bytesToHex(secretKey),
+    publicKey: bytesToHex(schnorr.getPublicKey(secretKey)), // x-only
+  };
+});
+const ring = keyPairs.map(k => k.publicKey);
+const sig = ringSign('Hello, world!', ring, 1, keyPairs[1].privateKey);
 
 const valid = ringVerify(sig);
 console.log(valid); // true
@@ -204,39 +244,38 @@ Produces an LSAG ring signature. Extends SAG with a deterministic key image that
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `message` | `string` | Message to sign. Any UTF-8 string. |
+| `message` | `string` | Message to sign. Any UTF-8 string, at most 65536 bytes. |
 | `ring` | `string[]` | Array of x-only public key hex strings. Minimum 2, maximum 1000, no duplicates. |
 | `signerIndex` | `number` | Integer index of the actual signer. Must satisfy `0 <= signerIndex < ring.length`. |
-| `privateKey` | `string` | Signer's private key as hex. Must match `ring[signerIndex]`. |
-| `electionId` | `string` | Non-empty string binding the key image to a specific context (election, vote round, rate-limit window, etc.). |
-| `domain` | `string` | Optional domain separator. Defaults to `'lsag-v1'`. |
+| `privateKey` | `string` | Signer's private key: 64 lowercase hex characters below the curve order. Must match `ring[signerIndex]`. |
+| `electionId` | `string` | Non-empty string, at most 512 UTF-8 bytes, binding the key image to a specific context (election, vote round, rate-limit window, etc.). |
+| `domain` | `string` | Optional 6th argument, after `electionId`: domain separator. Defaults to `'lsag-v1'`. Verifiers read it from the signature; see Domain Separators. |
 
 **Returns** an `LsagSignature` object. Fully serialisable to JSON.
 
 **Throws**
-- `ValidationError` — ring too small/large, duplicate members, index out of range, key mismatch, empty electionId.
-- `CryptoError` — invalid key or curve operation failure.
+- `ValidationError`: ring too small/large, duplicate members, index out of range or not an integer, private key not 64 lowercase hex or not below the curve order, key mismatch, empty or non-string electionId, electionId over 512 bytes, message over 65536 bytes.
+- A ring entry that is not a valid x-only curve point surfaces the underlying `@noble/curves` error, and a non-string ring entry a `TypeError`.
 
 **Example**
 
 ```typescript
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { bytesToHex } from '@noble/hashes/utils';
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { lsagSign } from '@forgesworn/ring-sig';
 
-const priv0 = bytesToHex(secp256k1.utils.randomSecretKey());
-const priv1 = bytesToHex(secp256k1.utils.randomSecretKey());
-const priv2 = bytesToHex(secp256k1.utils.randomSecretKey());
-
-const pub0 = bytesToHex(secp256k1.getPublicKey(priv0, true)).slice(2);
-const pub1 = bytesToHex(secp256k1.getPublicKey(priv1, true)).slice(2);
-const pub2 = bytesToHex(secp256k1.getPublicKey(priv2, true)).slice(2);
-
-const ring = [pub0, pub1, pub2];
+const keyPairs = Array.from({ length: 3 }, () => {
+  const secretKey = schnorr.utils.randomSecretKey();
+  return {
+    privateKey: bytesToHex(secretKey),
+    publicKey: bytesToHex(schnorr.getPublicKey(secretKey)), // x-only
+  };
+});
+const ring = keyPairs.map(k => k.publicKey);
 const electionId = 'election-2026-q1';
 
 // Sign as ring member at index 0
-const sig = lsagSign('candidate-A', ring, 0, priv0, electionId);
+const sig = lsagSign('candidate-A', ring, 0, keyPairs[0].privateKey, electionId);
 
 console.log(sig.keyImage); // deterministic 33-byte compressed point
 ```
@@ -249,17 +288,33 @@ console.log(sig.keyImage); // deterministic 33-byte compressed point
 function lsagVerify(sig: LsagSignature): boolean
 ```
 
-Verifies an LSAG ring signature. Returns `true` if valid, `false` otherwise. Never throws.
+Verifies an LSAG ring signature. Returns `true` if valid, `false` otherwise. Never throws: a `null` or otherwise malformed `sig` returns `false`.
+
+A vote verifier holds no private keys. It verifies `sig` and then uses `sig.keyImage` (not `computeKeyImage`, which needs the private key) to detect duplicates.
+
+The domain is taken from `sig.domain`, or `'lsag-v1'` when that field is absent. There is no expected-domain parameter, and no parameter for the expected ring or `electionId`: compare those to your own values before accepting (see Verifier Checklist).
 
 Also validates:
 - `keyImage` is a valid compressed secp256k1 point (02/03 prefix, 33 bytes)
 - `keyImage` is not the identity/zero point
-- `electionId` is a non-empty string
+- `electionId` is a non-empty string of at most 512 bytes
 
 **Example**
 
 ```typescript
-import { lsagVerify } from '@forgesworn/ring-sig';
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
+import { lsagSign, lsagVerify } from '@forgesworn/ring-sig';
+
+const keyPairs = Array.from({ length: 3 }, () => {
+  const secretKey = schnorr.utils.randomSecretKey();
+  return {
+    privateKey: bytesToHex(secretKey),
+    publicKey: bytesToHex(schnorr.getPublicKey(secretKey)), // x-only
+  };
+});
+const ring = keyPairs.map(k => k.publicKey);
+const sig = lsagSign('candidate-A', ring, 0, keyPairs[0].privateKey, 'election-2026-q1');
 
 const valid = lsagVerify(sig);
 console.log(valid); // true
@@ -279,26 +334,32 @@ function computeKeyImage(
 
 Computes `I = x * H_p(P || electionId)` — the deterministic key image for a signer in a given election.
 
-Call this to obtain the key image before signing, or to check in advance whether a signer has already participated in an election.
+Signer-side only: it needs the private key. The result equals `sig.keyImage` for any LSAG signature by that key in that election, so call it to check in advance whether a signer has already participated. A verifier without private keys reads `sig.keyImage` instead.
 
 **Parameters**
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `privateKey` | `string` | Signer's private key hex. |
+| `privateKey` | `string` | Signer's private key: 64 lowercase hex characters below the curve order. |
 | `publicKey` | `string` | Signer's x-only public key hex (must match `privateKey`). |
 | `electionId` | `string` | Non-empty string identifying the election or context. |
 
 **Returns** the key image as a compressed point hex string (66 hex chars).
 
-**Throws** `ValidationError` if the private key does not match the public key, or if `electionId` is empty.
+**Throws** `ValidationError` if the private key is malformed or does not match the public key, or if `electionId` is empty or not a string.
 
 **Example**
 
 ```typescript
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { computeKeyImage } from '@forgesworn/ring-sig';
 
-const image = computeKeyImage(priv0, pub0, 'election-2026-q1');
+const secretKey = schnorr.utils.randomSecretKey();
+const privateKey = bytesToHex(secretKey);
+const publicKey = bytesToHex(schnorr.getPublicKey(secretKey));
+
+const image = computeKeyImage(privateKey, publicKey, 'election-2026-q1');
 // image is a 66-character hex string beginning with '02' or '03'
 ```
 
@@ -326,12 +387,25 @@ Use this after verifying a signature to determine whether the signer has already
 
 **Returns** `boolean`.
 
-**Throws** `ValidationError` if `keyImage` is not in the expected compressed-point format.
+**Throws** `ValidationError` if `keyImage` is not in the expected compressed-point format. A non-hex entry in `existingImages` throws a `RangeError` from the underlying hex decoder, so store only values taken from `sig.keyImage`. Entries of a different length simply do not match.
 
 **Example**
 
 ```typescript
-import { hasDuplicateKeyImage } from '@forgesworn/ring-sig';
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
+import { lsagSign, lsagVerify, hasDuplicateKeyImage } from '@forgesworn/ring-sig';
+
+const keyPairs = Array.from({ length: 3 }, () => {
+  const secretKey = schnorr.utils.randomSecretKey();
+  return {
+    privateKey: bytesToHex(secretKey),
+    publicKey: bytesToHex(schnorr.getPublicKey(secretKey)), // x-only
+  };
+});
+const ring = keyPairs.map(k => k.publicKey);
+const sig = lsagSign('candidate-A', ring, 0, keyPairs[0].privateKey, 'election-2026-q1');
+if (!lsagVerify(sig)) throw new Error('Invalid signature');
 
 const seenImages: string[] = []; // load from your database
 
@@ -367,7 +441,7 @@ class ValidationError extends RingSignatureError {
 }
 ```
 
-Thrown for invalid inputs:
+Thrown by `ringSign`, `lsagSign`, `computeKeyImage` and `hasDuplicateKeyImage` for invalid inputs (the verify functions never throw; they return `false`):
 - Ring has fewer than 2 members
 - Ring exceeds 1000 members
 - Ring contains duplicate public keys
@@ -376,7 +450,9 @@ Thrown for invalid inputs:
 - `electionId` is empty or not a string, or exceeds 512 bytes
 - Key image is not a valid compressed-point hex
 - `message` exceeds 65536 bytes
-- A private key or `c0`/response scalar is non-canonical (not a valid 64-character lowercase hex value less than the curve order N)
+- A private key is non-canonical (not a valid 64-character lowercase hex value less than the curve order N)
+
+A ring entry that is not a valid x-only curve point surfaces the underlying `@noble/curves` error, and a non-string ring entry a `TypeError`; neither is wrapped in `ValidationError`.
 
 ### `CryptoError`
 
@@ -387,7 +463,7 @@ class CryptoError extends RingSignatureError {
 }
 ```
 
-Thrown for cryptographic failures: invalid scalar, point not on curve, failed curve operations.
+Thrown for internal cryptographic failure: hash-to-point exhaustion (no valid curve point found after 256 attempts). Not expected in practice; malformed private keys and scalars raise `ValidationError`.
 
 ---
 
@@ -399,22 +475,69 @@ Thrown for cryptographic failures: invalid scalar, point not on curve, failed cu
 const MAX_RING_SIZE: number = 1000;
 ```
 
-Exported from the top-level entry point. Maximum permitted ring members — a DoS guard against unbounded O(n) computation.
+Exported from the top-level entry point (re-exported from the SAG module; the LSAG module defines an identical constant that the entry point does not re-export). Maximum permitted ring members, a DoS guard against unbounded O(n) computation.
+
+The related limits `MAX_MESSAGE_BYTES` (65536) and `MAX_ELECTION_ID_BYTES` (512) are internal to the source modules and are not exported.
 
 ---
 
 ## Domain Separators
 
-Both `ringSign` and `lsagSign` include a `domain` parameter (defaults to `'sag-v1'` and `'lsag-v1'` respectively). Domain separators provide cross-protocol isolation: a signature produced under one domain cannot be replayed under another.
-
-Provide a custom domain if you need to namespace signatures per application:
+Both `ringSign` and `lsagSign` include a `domain` parameter (defaults to `'sag-v1'` and `'lsag-v1'` respectively). For `ringSign` it is the 5th argument; for `lsagSign` it is the 6th, after `electionId`. The domain string is included in every hash step of the challenge chain, so editing `domain` on an existing signature makes it fail verification.
 
 ```typescript
-// Signatures from my-app-v1 cannot be replayed as my-other-app-v1 signatures
-const sig = ringSign(message, ring, index, privateKey, 'my-app-v1');
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
+import { ringSign, ringVerify, lsagSign, lsagVerify } from '@forgesworn/ring-sig';
+
+const keyPairs = Array.from({ length: 3 }, () => {
+  const secretKey = schnorr.utils.randomSecretKey();
+  return {
+    privateKey: bytesToHex(secretKey),
+    publicKey: bytesToHex(schnorr.getPublicKey(secretKey)), // x-only
+  };
+});
+const ring = keyPairs.map(k => k.publicKey);
+const message = 'my message';
+const electionId = 'election-2026-q1';
+
+// Namespace signatures per application
+const sagSig = ringSign(message, ring, 0, keyPairs[0].privateKey, 'my-app-v1');
+const lsagSig = lsagSign(message, ring, 0, keyPairs[0].privateKey, electionId, 'my-app-v1');
+
+// The verify functions take only the signature and read the domain from it, so pin it yourself
+const sagOk = sagSig.domain === 'my-app-v1' && ringVerify(sagSig); // true
+const lsagOk = lsagSig.domain === 'my-app-v1' && lsagVerify(lsagSig); // true
 ```
 
-The domain string is included in every hash step of the challenge chain. Changing the domain breaks all existing signatures — treat it as a protocol constant once deployed.
+### What the verifier does with the domain
+
+`ringVerify` and `lsagVerify` take only the signature. They use `sig.domain` when present and otherwise the scheme default (`'sag-v1'` / `'lsag-v1'`). There is no expected-domain parameter. A signature made by anyone under any domain therefore verifies as it stands, so cross-protocol isolation depends on the verifier pinning the domain itself. For a custom domain, require the field to be present and equal (`sig.domain === 'my-app-v1'`, as above). For the default domain, the field is absent when signing with the default and an explicit default is equivalent, so normalise before comparing:
+
+```typescript
+import { type LsagSignature, lsagVerify } from '@forgesworn/ring-sig';
+
+function verifyWithDefaultDomain(sig: LsagSignature): boolean {
+  return (sig.domain ?? 'lsag-v1') === 'lsag-v1' && lsagVerify(sig);
+}
+```
+
+Changing the domain breaks all existing signatures, so treat it as a protocol constant once deployed.
+
+## Verifier Checklist
+
+Verification proves a signature is internally consistent. It does not know what you expected. Before accepting a signature:
+
+1. Compare `sig.ring` with the member set you expect (an attacker can sign validly over a ring of their own keys). The ring is lowercase hex, in signing order.
+2. Compare `sig.message` with the message you expect.
+3. LSAG: compare `sig.electionId` with the election you expect. A different `electionId` produces a different key image, which would defeat double-vote detection.
+4. Pin the domain as shown above.
+5. Call `ringVerify(sig)` or `lsagVerify(sig)`.
+6. LSAG: call `hasDuplicateKeyImage(sig.keyImage, seenImages)`, then record `sig.keyImage`. A verifier has no private keys, so it never calls `computeKeyImage`.
+
+## Version History and Migration
+
+See [CHANGELOG.md](https://github.com/forgesworn/ring-sig/blob/main/CHANGELOG.md). Coming from v2 to v3, scalar hex is validated strictly: private keys, `c0` and `responses` must be exactly 64 lowercase hex characters below the curve order (3.0.0 rejects values at or above N instead of reducing them; 3.0.3 also requires the canonical 64-character lowercase form, and caps `message` at 65536 bytes and `electionId` at 512 bytes). Signatures produced by this library always satisfy these rules; hand-encoded or re-encoded scalars do not.
 
 ---
 
@@ -464,17 +587,14 @@ The key image is deterministic: same private key + same electionId → identical
 ### Anonymous Group Membership Proof (SAG)
 
 ```typescript
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { bytesToHex } from '@noble/hashes/utils';
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { ringSign, ringVerify } from '@forgesworn/ring-sig';
 
 // Generate keys for a group of five
-const privKeys = Array.from({ length: 5 }, () =>
-  bytesToHex(secp256k1.utils.randomSecretKey())
-);
-const pubKeys = privKeys.map(priv =>
-  bytesToHex(secp256k1.getPublicKey(priv, true)).slice(2)
-);
+const secretKeys = Array.from({ length: 5 }, () => schnorr.utils.randomSecretKey());
+const privKeys = secretKeys.map(sk => bytesToHex(sk));
+const pubKeys = secretKeys.map(sk => bytesToHex(schnorr.getPublicKey(sk))); // x-only
 
 // Member at index 3 proves membership without revealing which one
 const sig = ringSign(
@@ -492,53 +612,64 @@ console.log(sig.ring.length); // 5 — verifier knows the group, not the signer
 ### Anonymous Voting With Double-Vote Detection (LSAG)
 
 ```typescript
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { bytesToHex } from '@noble/hashes/utils';
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import {
   lsagSign,
   lsagVerify,
-  computeKeyImage,
   hasDuplicateKeyImage,
+  type LsagSignature,
 } from '@forgesworn/ring-sig';
 
 // Eligible voters
 const voters = Array.from({ length: 10 }, () => {
-  const priv = bytesToHex(secp256k1.utils.randomSecretKey());
-  const pub = bytesToHex(secp256k1.getPublicKey(priv, true)).slice(2);
-  return { priv, pub };
+  const secretKey = schnorr.utils.randomSecretKey();
+  return {
+    priv: bytesToHex(secretKey),
+    pub: bytesToHex(schnorr.getPublicKey(secretKey)), // x-only
+  };
 });
 
 const ring = voters.map(v => v.pub);
 const electionId = 'community-vote-2026-q2';
 const acceptedKeyImages: string[] = [];
 
+// Verifier side: needs only the signature, no private keys
+function acceptBallot(ballot: LsagSignature): 'accepted' | 'rejected' {
+  if (ballot.electionId !== electionId) return 'rejected';
+  if (ballot.ring.join() !== ring.join()) return 'rejected';
+  if (!lsagVerify(ballot)) return 'rejected';
+  if (hasDuplicateKeyImage(ballot.keyImage, acceptedKeyImages)) return 'rejected';
+  acceptedKeyImages.push(ballot.keyImage);
+  return 'accepted';
+}
+
 // Voter 4 casts a vote
 const vote = lsagSign('option-B', ring, 4, voters[4].priv, electionId);
+console.log(acceptBallot(vote)); // 'accepted'
 
-if (!lsagVerify(vote)) throw new Error('Invalid signature');
-
-if (hasDuplicateKeyImage(vote.keyImage, acceptedKeyImages)) {
-  throw new Error('Duplicate vote rejected');
-}
-
-acceptedKeyImages.push(vote.keyImage);
-console.log('Vote accepted. Key image recorded.');
-
-// Voter 4 tries to vote again — detected
+// Voter 4 tries to vote again: same key image, detected
 const secondVote = lsagSign('option-A', ring, 4, voters[4].priv, electionId);
-
-if (lsagVerify(secondVote) && hasDuplicateKeyImage(secondVote.keyImage, acceptedKeyImages)) {
-  console.log('Double-vote detected and rejected.'); // this branch runs
-}
+console.log(acceptBallot(secondVote)); // 'rejected'
 ```
 
-### Pre-Computing Key Images
+### Pre-Computing Key Images (signer side)
+
+`computeKeyImage` needs the private key, so only the key holder (or an authority that holds the keys) can use it. It returns the same value that would appear as `sig.keyImage`.
 
 ```typescript
-import { computeKeyImage } from '@forgesworn/ring-sig';
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
+import { computeKeyImage, hasDuplicateKeyImage } from '@forgesworn/ring-sig';
+
+const secretKey = schnorr.utils.randomSecretKey();
+const priv = bytesToHex(secretKey);
+const pub = bytesToHex(schnorr.getPublicKey(secretKey)); // x-only
+const electionId = 'community-vote-2026-q2';
+const acceptedKeyImages: string[] = []; // key images already recorded by the ballot box
 
 // Compute before signing — useful to check eligibility first
-const image = computeKeyImage(voters[4].priv, voters[4].pub, electionId);
+const image = computeKeyImage(priv, pub, electionId);
 
 // Check if this voter has already participated
 if (hasDuplicateKeyImage(image, acceptedKeyImages)) {
@@ -549,11 +680,28 @@ if (hasDuplicateKeyImage(image, acceptedKeyImages)) {
 ### Custom Domain Separation
 
 ```typescript
-import { ringSign, lsagSign } from '@forgesworn/ring-sig';
+import { schnorr } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
+import { ringSign, ringVerify, lsagSign, lsagVerify } from '@forgesworn/ring-sig';
 
-// Namespace signatures per application — prevents cross-context replay
-const sagSig = ringSign(message, ring, index, priv, 'my-app-sag-v1');
-const lsagSig = lsagSign(message, ring, index, priv, electionId, 'my-app-lsag-v1');
+const keyPairs = Array.from({ length: 3 }, () => {
+  const secretKey = schnorr.utils.randomSecretKey();
+  return {
+    priv: bytesToHex(secretKey),
+    pub: bytesToHex(schnorr.getPublicKey(secretKey)), // x-only
+  };
+});
+const ring = keyPairs.map(k => k.pub);
+const message = 'my message';
+const index = 0;
+const electionId = 'election-2026-q1';
+
+// Namespace signatures per application; isolation needs the verifier to pin the domain
+const sagSig = ringSign(message, ring, index, keyPairs[index].priv, 'my-app-sag-v1');
+const lsagSig = lsagSign(message, ring, index, keyPairs[index].priv, electionId, 'my-app-lsag-v1');
+
+const sagOk = sagSig.domain === 'my-app-sag-v1' && ringVerify(sagSig); // true
+const lsagOk = lsagSig.domain === 'my-app-lsag-v1' && lsagVerify(lsagSig); // true
 ```
 
 ---

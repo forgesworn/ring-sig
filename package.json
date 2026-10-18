@@ -14,7 +14,8 @@
   "files": [
     "dist",
     "llms.txt",
-    "llms-full.txt"
+    "llms-full.txt",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc",
