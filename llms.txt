@@ -2,6 +2,12 @@
 
 > SAG and LSAG ring signatures on secp256k1: prove group membership without revealing identity, with optional double-action detection via linkable key images.
 
+## ForgeSworn ecosystem
+
+- [ForgeSworn library guide](https://forgesworn.dev/llms.txt): Find related libraries, tools and integration guides by task and runtime.
+- [ForgeSworn on GitHub](https://github.com/forgesworn): Browse the organisation’s public repositories.
+- [Project source](https://github.com/forgesworn/ring-sig): Canonical source repository, documentation and release information.
+
 ## Getting Started
 
 Install from npm:
